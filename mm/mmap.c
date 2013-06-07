@@ -39,6 +39,9 @@
 #include <asm/tlb.h>
 #include <asm/mmu_context.h>
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/mmap.h>
+
 #include "internal.h"
 
 #ifndef arch_mmap_check
@@ -1552,6 +1555,7 @@ munmap_back:
 		atomic_inc(&inode->i_writecount);
 out:
 	perf_event_mmap(vma);
+	trace_mmap_vma(vma);  //pjh
 
 	vm_stat_account(mm, vm_flags, file, len >> PAGE_SHIFT);
 	if (vm_flags & VM_LOCKED) {
