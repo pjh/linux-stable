@@ -30,15 +30,46 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 
 	TP_ARGS(vma),  // names of args in TP_PROTO
 
+	/* Rather than just copying the vm_area_struct *vma pointer, we must
+	 * copy all of the field values that we'll need into the ring buffer
+	 * struct - if not, then when we try to get these values later on
+	 * (when printing the trace output), the vma may be already deallocated
+	 * and we'll get a NULL pointer reference + kernel oops (note that the
+	 * kmem.h events file doesn't dereference any pointers in its printk).
+	 */
 	TP_STRUCT__entry(
-		__field(struct vm_area_struct *, vma)
+		__field(unsigned long, vm_start)
+		__field(unsigned long, vm_end)
+		//__field(pgprot_t, vm_page_prot)
+		__field(unsigned long, vm_flags)
+		__field(unsigned long long, vm_pgoff)
+		__field(unsigned int, dev_major)
+		__field(unsigned int, dev_minor)
+		__field(unsigned long, inode)
 		__array(char, filename, PJH_BUF_LEN)
 	),
 
 	TP_fast_assign(
-		__entry->vma		= vma;
-#ifdef PJH_FANCY
+		__entry->vm_start =
+			stack_guard_page_start(vma, vma->vm_start) ?
+				vma->vm_start + PAGE_SIZE :
+				vma->vm_start;
+		__entry->vm_end =
+			stack_guard_page_end(vma, vma->vm_end) ?
+				vma->vm_end - PAGE_SIZE :
+				vma->vm_end;
+		//__entry->vm_page_prot = vma->vm_page_prot;
+		__entry->vm_flags = vma->vm_flags;
+		__entry->vm_pgoff =
+			vma->vm_file ? ((loff_t)(vma->vm_pgoff)) << PAGE_SHIFT : 0;
+		__entry->dev_major =
+			vma->vm_file ? MAJOR(file_inode(vma->vm_file)->i_sb->s_dev) : 0;
+		__entry->dev_minor = 
+			vma->vm_file ? MINOR(file_inode(vma->vm_file)->i_sb->s_dev) : 0;
+		__entry->inode = 
+			vma->vm_file ? file_inode(vma->vm_file)->i_ino : 0;
 		if (vma->vm_file) {
+#ifdef PJH_FANCY
 			// Imitate: show_map_vma() calls seq_path() calls d_path()
 			char *p = d_path(vma->vm_file->f_path,
 				(char *)__entry->filename, PJH_BUF_LEN)
@@ -50,14 +81,15 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 				p--;
 				*p = ' ';
 			}
+#else
+			strncpy(__entry->filename, "/some/path/somefile", PJH_BUF_LEN-1);
+#endif
 		} else {
 			__entry->filename[0] = '\0';
 		}
 		__entry->filename[PJH_BUF_LEN-1] = '\0';  //defensive
-#else
-		strncpy(__entry->filename, "/some/path/somefile", PJH_BUF_LEN-1);
-		__entry->filename[PJH_BUF_LEN-1] = '\0';  //defensive
-#endif
+		//TODO: add code for special cases of filename: [heap], [vdso],
+		//  [stack], [vsyscall]
 	),
 
 	/* See definition of vm_area_struct in include/linux/mm_types.h.
@@ -65,34 +97,18 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 	 *   00400000-0040c000 r-xp 00000000 fd:01 41038  /bin/cat
 	 */
 	TP_printk("%08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
-		stack_guard_page_start(__entry->vma, __entry->vma->vm_start) ?
-			__entry->vma->vm_start + PAGE_SIZE :
-			__entry->vma->vm_start,
-		stack_guard_page_end(__entry->vma, __entry->vma->vm_end) ?
-			__entry->vma->vm_end - PAGE_SIZE :
-			__entry->vma->vm_end,
-		__entry->vma->vm_flags & VM_READ ? 'r' : '-',
-		__entry->vma->vm_flags & VM_WRITE ? 'w' : '-',
-		__entry->vma->vm_flags & VM_EXEC ? 'x' : '-',
-		__entry->vma->vm_flags & VM_MAYSHARE ? 's' : 'p',
-		__entry->vma->vm_file ?
-			((loff_t)(__entry->vma->vm_pgoff)) << PAGE_SHIFT :
-			0,
-		__entry->vma->vm_file ?
-			MAJOR(file_inode(__entry->vma->vm_file)->i_sb->s_dev) :
-			MAJOR(0),
-		__entry->vma->vm_file ?
-			MINOR(file_inode(__entry->vma->vm_file)->i_sb->s_dev) :
-			MINOR(0),
-		__entry->vma->vm_file ?
-			file_inode(__entry->vma->vm_file)->i_ino :
-			0,
-		__entry->vma->vm_file ?
-			__entry->filename :
-			""
+		__entry->vm_start,
+		__entry->vm_end,
+		__entry->vm_flags & VM_READ ? 'r' : '-',
+		__entry->vm_flags & VM_WRITE ? 'w' : '-',
+		__entry->vm_flags & VM_EXEC ? 'x' : '-',
+		__entry->vm_flags & VM_MAYSHARE ? 's' : 'p',
+		__entry->vm_pgoff,
+		__entry->dev_major,
+		__entry->dev_minor,
+		__entry->inode,
+		__entry->filename
 		)
-		//TODO: add code to print special cases: [heap], [vdso], [stack],
-		//  [vsyscall]
 );
 
 #if 0
