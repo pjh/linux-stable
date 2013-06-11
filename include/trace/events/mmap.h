@@ -38,6 +38,7 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 	 * kmem.h events file doesn't dereference any pointers in its printk).
 	 */
 	TP_STRUCT__entry(
+		__field(struct vm_area_struct *, vma)
 		__field(unsigned long, vm_start)
 		__field(unsigned long, vm_end)
 		//__field(pgprot_t, vm_page_prot)
@@ -50,6 +51,7 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 	),
 
 	TP_fast_assign(
+		__entry->vma = vma;
 		__entry->vm_start =
 			stack_guard_page_start(vma, vma->vm_start) ?
 				vma->vm_start + PAGE_SIZE :
@@ -96,7 +98,8 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 	 * Imitate printing of a vma entry in fs/proc/task_mmu.c:show_map_vma().
 	 *   00400000-0040c000 r-xp 00000000 fd:01 41038  /bin/cat
 	 */
-	TP_printk("%08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
+	TP_printk("%p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
+		__entry->vma,
 		__entry->vm_start,
 		__entry->vm_end,
 		__entry->vm_flags & VM_READ ? 'r' : '-',

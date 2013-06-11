@@ -2122,6 +2122,7 @@ int expand_upwards(struct vm_area_struct *vma, unsigned long address)
 				spin_unlock(&vma->vm_mm->page_table_lock);
 
 				perf_event_mmap(vma);
+				trace_mmap_vma(vma);  //pjh
 			}
 		}
 	}
@@ -2191,6 +2192,7 @@ int expand_downwards(struct vm_area_struct *vma,
 				spin_unlock(&vma->vm_mm->page_table_lock);
 
 				perf_event_mmap(vma);
+				trace_mmap_vma(vma);  //pjh
 			}
 		}
 	}
@@ -2644,6 +2646,7 @@ static unsigned long do_brk(unsigned long addr, unsigned long len)
 	vma_link(mm, vma, prev, rb_link, rb_parent);
 out:
 	perf_event_mmap(vma);
+	trace_mmap_vma(vma);  //pjh
 	mm->total_vm += len >> PAGE_SHIFT;
 	if (flags & VM_LOCKED)
 		mm->locked_vm += (len >> PAGE_SHIFT);
@@ -2927,6 +2930,7 @@ int install_special_mapping(struct mm_struct *mm,
 	mm->total_vm += len >> PAGE_SHIFT;
 
 	perf_event_mmap(vma);
+	trace_mmap_vma(vma);  //pjh
 
 	return 0;
 
