@@ -665,7 +665,6 @@ int vma_adjust(struct vm_area_struct *vma, unsigned long start,
 {
 	struct mm_struct *mm = vma->vm_mm;
 	struct vm_area_struct *next = vma->vm_next;
-	struct vm_area_struct *importer = NULL;
 	struct address_space *mapping = NULL;
 	struct rb_root *root = NULL;
 	struct anon_vma *anon_vma = NULL;
@@ -674,7 +673,18 @@ int vma_adjust(struct vm_area_struct *vma, unsigned long start,
 	long adjust_next = 0;
 	int remove_next = 0;
 
+	/* PJH: if insert is non-NULL, then the other existing vm_area_structs
+	 * (besides vma) are never modified. This is because insert is only
+	 * non-NULL when called from __split_vma(), which strictly splits an
+	 * existing vma and never changes the bounds of any existing vma.
+	 *   Note that __split_vma() may be called from sys_mmap -> ... ->
+	 *   do_munmap, so it's unclear if one or the other is the "common case."
+	 *   But also note that not all sys_mmap calls lead to vma_adjust, so
+	 *   there will still be some tracing necessary in other functions
+	 *   (mmap_region()?).
+	 */
 	if (next && !insert) {
+		struct vm_area_struct *importer = NULL;  //pjh: was inconsistent...
 		struct vm_area_struct *exporter = NULL;
 
 		if (end >= next->vm_end) {
@@ -722,13 +732,10 @@ again:			remove_next = 1 + (end > next->vm_end);
 		if (!(vma->vm_flags & VM_NONLINEAR)) {
 			root = &mapping->i_mmap;
 			uprobe_munmap(vma, vma->vm_start, vma->vm_end);
-			trace_munmap_vma(vma, "vma_adjust-vma");  //pjh
 
-			if (adjust_next) {
+			if (adjust_next)
 				uprobe_munmap(next, next->vm_start,
 							next->vm_end);
-				trace_munmap_vma(next, "vma_adjust-next1");  //pjh
-			}
 		}
 
 		mutex_lock(&mapping->i_mmap_mutex);
@@ -764,6 +771,13 @@ again:			remove_next = 1 + (end > next->vm_end);
 			vma_interval_tree_remove(next, root);
 	}
 
+	/* PJH: my tracing code is going to use vma->vm_start as the key for
+	 * identifying vmas, so before the vm_start is changed here, must
+	 * make a trace call to UNMAP the existing mapping!
+	 *   For simplicity, just _always_ unmap, then map again, even if start
+	 *   isn't going to change.
+	 */
+	trace_munmap_vma(vma, "vma_adjust-vma");  //pjh
 	if (start != vma->vm_start) {
 		vma->vm_start = start;
 		start_changed = true;
@@ -773,9 +787,12 @@ again:			remove_next = 1 + (end > next->vm_end);
 		end_changed = true;
 	}
 	vma->vm_pgoff = pgoff;
+	trace_mmap_vma(vma, "vma_adjust-vma");  //pjh
 	if (adjust_next) {
+		trace_munmap_vma(next, "vma_adjust-adjust_next");  //pjh
 		next->vm_start += adjust_next << PAGE_SHIFT;
 		next->vm_pgoff += adjust_next;
+		trace_mmap_vma(next, "vma_adjust-adjust_next");  //pjh
 	}
 
 	if (root) {
@@ -786,6 +803,9 @@ again:			remove_next = 1 + (end > next->vm_end);
 	}
 
 	if (remove_next) {
+		/* PJH: trace _before_ removal, in case something is unset after */
+		trace_munmap_vma(next, "vma_adjust-remove_next");  //pjh
+
 		/*
 		 * vma_merge has merged next into vma, and needs
 		 * us to remove next before dropping the locks.
@@ -800,6 +820,9 @@ again:			remove_next = 1 + (end > next->vm_end);
 		 * (it may either follow vma or precede it).
 		 */
 		__insert_vm_struct(mm, insert);
+
+		/* PJH: trace _after_ insertion, in case something isn't set earlier */
+		trace_mmap_vma(insert, "vma_adjust-insert");  //pjh
 	} else {
 		if (start_changed)
 			vma_gap_update(vma);
@@ -822,18 +845,14 @@ again:			remove_next = 1 + (end > next->vm_end);
 
 	if (root) {
 		uprobe_mmap(vma);
-		trace_mmap_vma(vma, "vma_adjust-vma");  //pjh
 
-		if (adjust_next) {
+		if (adjust_next)
 			uprobe_mmap(next);
-			trace_mmap_vma(next, "vma_adjust-next");  //pjh
-		}
 	}
 
 	if (remove_next) {
 		if (file) {
 			uprobe_munmap(next, next->vm_start, next->vm_end);
-			trace_munmap_vma(next, "vma_adjust-next2");  //pjh
 			fput(file);
 		}
 		if (next->anon_vma)
@@ -846,6 +865,9 @@ again:			remove_next = 1 + (end > next->vm_end);
 		 * we must remove another next too. It would clutter
 		 * up the code too much to do both in one go.
 		 */
+		/* PJH: I'm pretty sure that everything should "just work" in the
+		 * "again" case. uprobe doesn't do anything special either...
+		 */
 		next = vma->vm_next;
 		if (remove_next == 2)
 			goto again;
@@ -854,10 +876,8 @@ again:			remove_next = 1 + (end > next->vm_end);
 		else
 			mm->highest_vm_end = end;
 	}
-	if (insert && file) {
+	if (insert && file)
 		uprobe_mmap(insert);
-		trace_mmap_vma(insert, "vma_adjust-insert");  //pjh
-	}
 
 	validate_mm(mm);
 
@@ -2420,6 +2440,17 @@ static int __split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 			((addr - new->vm_start) >> PAGE_SHIFT), new);
 	else
 		err = vma_adjust(vma, vma->vm_start, addr, vma->vm_pgoff, new);
+
+	/* PJH: vma_adjust is used to adjust the tree when start / end / etc. are
+	 * changed for a vma. vma_adjust will modify the vm_start / vm_end /
+	 * pgoff of "vma", and possibly the vm_start / pgoff of vma->vm_next as
+	 * well. Additionall, it will insert "new" into the vma tree / list /
+	 * etc.
+	 *
+	 * All of the necessary tracing is now done in vma_adjust; it will capture
+	 * the split+insert case here, as well as other cases that end up at
+	 * the vma_adjust function.
+	 */
 
 	/* Success. */
 	if (!err)
