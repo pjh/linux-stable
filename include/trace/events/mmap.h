@@ -26,9 +26,9 @@
 
 TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 
-	TP_PROTO(struct vm_area_struct *vma),
+	TP_PROTO(struct vm_area_struct *vma, const char *label),
 
-	TP_ARGS(vma),  // names of args in TP_PROTO
+	TP_ARGS(vma, label),  // names of args in TP_PROTO
 
 	/* Rather than just copying the vm_area_struct *vma pointer, we must
 	 * copy all of the field values that we'll need into the ring buffer
@@ -38,6 +38,7 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 	 * kmem.h events file doesn't dereference any pointers in its printk).
 	 */
 	TP_STRUCT__entry(
+		__array(char, label, PJH_BUF_LEN)
 		__field(struct vm_area_struct *, vma)
 		__field(unsigned long, vm_start)
 		__field(unsigned long, vm_end)
@@ -51,6 +52,8 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 	),
 
 	TP_fast_assign(
+		strncpy(__entry->label, label, PJH_BUF_LEN-1);
+		__entry->label[PJH_BUF_LEN-1] = '\0';  //defensive
 		__entry->vma = vma;
 		__entry->vm_start =
 			stack_guard_page_start(vma, vma->vm_start) ?
@@ -98,7 +101,8 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 	 * Imitate printing of a vma entry in fs/proc/task_mmu.c:show_map_vma().
 	 *   00400000-0040c000 r-xp 00000000 fd:01 41038  /bin/cat
 	 */
-	TP_printk("%p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
+	TP_printk("%s: %p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
+		__entry->label,
 		__entry->vma,
 		__entry->vm_start,
 		__entry->vm_end,
@@ -114,301 +118,99 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 		)
 );
 
-#if 0
-DECLARE_EVENT_CLASS(mmap_alloc,
+TRACE_EVENT(munmap_vma,  // creates a function "trace_munmap_vma"
 
-	TP_PROTO(unsigned long call_site,
-		 const void *ptr,
-		 size_t bytes_req,
-		 size_t bytes_alloc,
-		 gfp_t gfp_flags),
+	TP_PROTO(struct vm_area_struct *vma, const char *label),
 
-	TP_ARGS(call_site, ptr, bytes_req, bytes_alloc, gfp_flags),
+	TP_ARGS(vma, label),  // names of args in TP_PROTO
 
+	/* Rather than just copying the vm_area_struct *vma pointer, we must
+	 * copy all of the field values that we'll need into the ring buffer
+	 * struct - if not, then when we try to get these values later on
+	 * (when printing the trace output), the vma may be already deallocated
+	 * and we'll get a NULL pointer reference + kernel oops (note that the
+	 * kmem.h events file doesn't dereference any pointers in its printk).
+	 */
 	TP_STRUCT__entry(
-		__field(	unsigned long,	call_site	)
-		__field(	const void *,	ptr		)
-		__field(	size_t,		bytes_req	)
-		__field(	size_t,		bytes_alloc	)
-		__field(	gfp_t,		gfp_flags	)
+		__array(char, label, PJH_BUF_LEN)
+		__field(struct vm_area_struct *, vma)
+		__field(unsigned long, vm_start)
+		__field(unsigned long, vm_end)
+		//__field(pgprot_t, vm_page_prot)
+		__field(unsigned long, vm_flags)
+		__field(unsigned long long, vm_pgoff)
+		__field(unsigned int, dev_major)
+		__field(unsigned int, dev_minor)
+		__field(unsigned long, inode)
+		__array(char, filename, PJH_BUF_LEN)
 	),
 
 	TP_fast_assign(
-		__entry->call_site	= call_site;
-		__entry->ptr		= ptr;
-		__entry->bytes_req	= bytes_req;
-		__entry->bytes_alloc	= bytes_alloc;
-		__entry->gfp_flags	= gfp_flags;
-	),
-
-	TP_printk("call_site=%lx ptr=%p bytes_req=%zu bytes_alloc=%zu gfp_flags=%s",
-		__entry->call_site,
-		__entry->ptr,
-		__entry->bytes_req,
-		__entry->bytes_alloc,
-		show_gfp_flags(__entry->gfp_flags))
-);
-
-DEFINE_EVENT(mmap_alloc, kmalloc,
-
-	TP_PROTO(unsigned long call_site, const void *ptr,
-		 size_t bytes_req, size_t bytes_alloc, gfp_t gfp_flags),
-
-	TP_ARGS(call_site, ptr, bytes_req, bytes_alloc, gfp_flags)
-);
-
-DEFINE_EVENT(mmap_alloc, mmap_cache_alloc,
-
-	TP_PROTO(unsigned long call_site, const void *ptr,
-		 size_t bytes_req, size_t bytes_alloc, gfp_t gfp_flags),
-
-	TP_ARGS(call_site, ptr, bytes_req, bytes_alloc, gfp_flags)
-);
-
-DECLARE_EVENT_CLASS(mmap_alloc_node,
-
-	TP_PROTO(unsigned long call_site,
-		 const void *ptr,
-		 size_t bytes_req,
-		 size_t bytes_alloc,
-		 gfp_t gfp_flags,
-		 int node),
-
-	TP_ARGS(call_site, ptr, bytes_req, bytes_alloc, gfp_flags, node),
-
-	TP_STRUCT__entry(
-		__field(	unsigned long,	call_site	)
-		__field(	const void *,	ptr		)
-		__field(	size_t,		bytes_req	)
-		__field(	size_t,		bytes_alloc	)
-		__field(	gfp_t,		gfp_flags	)
-		__field(	int,		node		)
-	),
-
-	TP_fast_assign(
-		__entry->call_site	= call_site;
-		__entry->ptr		= ptr;
-		__entry->bytes_req	= bytes_req;
-		__entry->bytes_alloc	= bytes_alloc;
-		__entry->gfp_flags	= gfp_flags;
-		__entry->node		= node;
-	),
-
-	TP_printk("call_site=%lx ptr=%p bytes_req=%zu bytes_alloc=%zu gfp_flags=%s node=%d",
-		__entry->call_site,
-		__entry->ptr,
-		__entry->bytes_req,
-		__entry->bytes_alloc,
-		show_gfp_flags(__entry->gfp_flags),
-		__entry->node)
-);
-
-DEFINE_EVENT(mmap_alloc_node, kmalloc_node,
-
-	TP_PROTO(unsigned long call_site, const void *ptr,
-		 size_t bytes_req, size_t bytes_alloc,
-		 gfp_t gfp_flags, int node),
-
-	TP_ARGS(call_site, ptr, bytes_req, bytes_alloc, gfp_flags, node)
-);
-
-DEFINE_EVENT(mmap_alloc_node, mmap_cache_alloc_node,
-
-	TP_PROTO(unsigned long call_site, const void *ptr,
-		 size_t bytes_req, size_t bytes_alloc,
-		 gfp_t gfp_flags, int node),
-
-	TP_ARGS(call_site, ptr, bytes_req, bytes_alloc, gfp_flags, node)
-);
-
-DECLARE_EVENT_CLASS(mmap_free,
-
-	TP_PROTO(unsigned long call_site, const void *ptr),
-
-	TP_ARGS(call_site, ptr),
-
-	TP_STRUCT__entry(
-		__field(	unsigned long,	call_site	)
-		__field(	const void *,	ptr		)
-	),
-
-	TP_fast_assign(
-		__entry->call_site	= call_site;
-		__entry->ptr		= ptr;
-	),
-
-	TP_printk("call_site=%lx ptr=%p", __entry->call_site, __entry->ptr)
-);
-
-DEFINE_EVENT(mmap_free, kfree,
-
-	TP_PROTO(unsigned long call_site, const void *ptr),
-
-	TP_ARGS(call_site, ptr)
-);
-
-DEFINE_EVENT(mmap_free, mmap_cache_free,
-
-	TP_PROTO(unsigned long call_site, const void *ptr),
-
-	TP_ARGS(call_site, ptr)
-);
-
-TRACE_EVENT(mm_page_free,
-
-	TP_PROTO(struct page *page, unsigned int order),
-
-	TP_ARGS(page, order),
-
-	TP_STRUCT__entry(
-		__field(	struct page *,	page		)
-		__field(	unsigned int,	order		)
-	),
-
-	TP_fast_assign(
-		__entry->page		= page;
-		__entry->order		= order;
-	),
-
-	TP_printk("page=%p pfn=%lu order=%d",
-			__entry->page,
-			page_to_pfn(__entry->page),
-			__entry->order)
-);
-
-TRACE_EVENT(mm_page_free_batched,
-
-	TP_PROTO(struct page *page, int cold),
-
-	TP_ARGS(page, cold),
-
-	TP_STRUCT__entry(
-		__field(	struct page *,	page		)
-		__field(	int,		cold		)
-	),
-
-	TP_fast_assign(
-		__entry->page		= page;
-		__entry->cold		= cold;
-	),
-
-	TP_printk("page=%p pfn=%lu order=0 cold=%d",
-			__entry->page,
-			page_to_pfn(__entry->page),
-			__entry->cold)
-);
-
-TRACE_EVENT(mm_page_alloc,
-
-	TP_PROTO(struct page *page, unsigned int order,
-			gfp_t gfp_flags, int migratetype),
-
-	TP_ARGS(page, order, gfp_flags, migratetype),
-
-	TP_STRUCT__entry(
-		__field(	struct page *,	page		)
-		__field(	unsigned int,	order		)
-		__field(	gfp_t,		gfp_flags	)
-		__field(	int,		migratetype	)
-	),
-
-	TP_fast_assign(
-		__entry->page		= page;
-		__entry->order		= order;
-		__entry->gfp_flags	= gfp_flags;
-		__entry->migratetype	= migratetype;
-	),
-
-	TP_printk("page=%p pfn=%lu order=%d migratetype=%d gfp_flags=%s",
-		__entry->page,
-		__entry->page ? page_to_pfn(__entry->page) : 0,
-		__entry->order,
-		__entry->migratetype,
-		show_gfp_flags(__entry->gfp_flags))
-);
-
-DECLARE_EVENT_CLASS(mm_page,
-
-	TP_PROTO(struct page *page, unsigned int order, int migratetype),
-
-	TP_ARGS(page, order, migratetype),
-
-	TP_STRUCT__entry(
-		__field(	struct page *,	page		)
-		__field(	unsigned int,	order		)
-		__field(	int,		migratetype	)
-	),
-
-	TP_fast_assign(
-		__entry->page		= page;
-		__entry->order		= order;
-		__entry->migratetype	= migratetype;
-	),
-
-	TP_printk("page=%p pfn=%lu order=%u migratetype=%d percpu_refill=%d",
-		__entry->page,
-		__entry->page ? page_to_pfn(__entry->page) : 0,
-		__entry->order,
-		__entry->migratetype,
-		__entry->order == 0)
-);
-
-DEFINE_EVENT(mm_page, mm_page_alloc_zone_locked,
-
-	TP_PROTO(struct page *page, unsigned int order, int migratetype),
-
-	TP_ARGS(page, order, migratetype)
-);
-
-DEFINE_EVENT_PRINT(mm_page, mm_page_pcpu_drain,
-
-	TP_PROTO(struct page *page, unsigned int order, int migratetype),
-
-	TP_ARGS(page, order, migratetype),
-
-	TP_printk("page=%p pfn=%lu order=%d migratetype=%d",
-		__entry->page, page_to_pfn(__entry->page),
-		__entry->order, __entry->migratetype)
-);
-
-TRACE_EVENT(mm_page_alloc_extfrag,
-
-	TP_PROTO(struct page *page,
-			int alloc_order, int fallback_order,
-			int alloc_migratetype, int fallback_migratetype),
-
-	TP_ARGS(page,
-		alloc_order, fallback_order,
-		alloc_migratetype, fallback_migratetype),
-
-	TP_STRUCT__entry(
-		__field(	struct page *,	page			)
-		__field(	int,		alloc_order		)
-		__field(	int,		fallback_order		)
-		__field(	int,		alloc_migratetype	)
-		__field(	int,		fallback_migratetype	)
-	),
-
-	TP_fast_assign(
-		__entry->page			= page;
-		__entry->alloc_order		= alloc_order;
-		__entry->fallback_order		= fallback_order;
-		__entry->alloc_migratetype	= alloc_migratetype;
-		__entry->fallback_migratetype	= fallback_migratetype;
-	),
-
-	TP_printk("page=%p pfn=%lu alloc_order=%d fallback_order=%d pageblock_order=%d alloc_migratetype=%d fallback_migratetype=%d fragmenting=%d change_ownership=%d",
-		__entry->page,
-		page_to_pfn(__entry->page),
-		__entry->alloc_order,
-		__entry->fallback_order,
-		pageblock_order,
-		__entry->alloc_migratetype,
-		__entry->fallback_migratetype,
-		__entry->fallback_order < pageblock_order,
-		__entry->alloc_migratetype == __entry->fallback_migratetype)
-);
+		strncpy(__entry->label, label, PJH_BUF_LEN-1);
+		__entry->label[PJH_BUF_LEN-1] = '\0';  //defensive
+		__entry->vma = vma;
+		__entry->vm_start =
+			stack_guard_page_start(vma, vma->vm_start) ?
+				vma->vm_start + PAGE_SIZE :
+				vma->vm_start;
+		__entry->vm_end =
+			stack_guard_page_end(vma, vma->vm_end) ?
+				vma->vm_end - PAGE_SIZE :
+				vma->vm_end;
+		//__entry->vm_page_prot = vma->vm_page_prot;
+		__entry->vm_flags = vma->vm_flags;
+		__entry->vm_pgoff =
+			vma->vm_file ? ((loff_t)(vma->vm_pgoff)) << PAGE_SHIFT : 0;
+		__entry->dev_major =
+			vma->vm_file ? MAJOR(file_inode(vma->vm_file)->i_sb->s_dev) : 0;
+		__entry->dev_minor = 
+			vma->vm_file ? MINOR(file_inode(vma->vm_file)->i_sb->s_dev) : 0;
+		__entry->inode = 
+			vma->vm_file ? file_inode(vma->vm_file)->i_ino : 0;
+		if (vma->vm_file) {
+#ifdef PJH_FANCY
+			// Imitate: show_map_vma() calls seq_path() calls d_path()
+			char *p = d_path(vma->vm_file->f_path,
+				(char *)__entry->filename, PJH_BUF_LEN)
+			while (p > (char *)__entry->filename) {
+				/* d_path() may return a pointer that is some distance into
+				 * the filename buffer, with the initial characters as 0
+				 * bytes. So, just replace them with spaces:
+				 */
+				p--;
+				*p = ' ';
+			}
+#else
+			strncpy(__entry->filename, "/some/path/somefile", PJH_BUF_LEN-1);
 #endif
+		} else {
+			__entry->filename[0] = '\0';
+		}
+		__entry->filename[PJH_BUF_LEN-1] = '\0';  //defensive
+		//TODO: add code for special cases of filename: [heap], [vdso],
+		//  [stack], [vsyscall]
+	),
+
+	/* See definition of vm_area_struct in include/linux/mm_types.h.
+	 * Imitate printing of a vma entry in fs/proc/task_mmu.c:show_map_vma().
+	 *   00400000-0040c000 r-xp 00000000 fd:01 41038  /bin/cat
+	 */
+	TP_printk("%s: %p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
+		__entry->label,
+		__entry->vma,
+		__entry->vm_start,
+		__entry->vm_end,
+		__entry->vm_flags & VM_READ ? 'r' : '-',
+		__entry->vm_flags & VM_WRITE ? 'w' : '-',
+		__entry->vm_flags & VM_EXEC ? 'x' : '-',
+		__entry->vm_flags & VM_MAYSHARE ? 's' : 'p',
+		__entry->vm_pgoff,
+		__entry->dev_major,
+		__entry->dev_minor,
+		__entry->inode,
+		__entry->filename
+		)
+);
 
 #endif /* _TRACE_MMAP_H */
 

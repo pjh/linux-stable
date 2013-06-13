@@ -67,6 +67,8 @@
 #include <asm/tlbflush.h>
 #include <asm/pgtable.h>
 
+#include <trace/events/mmap.h>
+
 #include "internal.h"
 
 #ifdef LAST_NID_NOT_IN_PAGE_FLAGS
@@ -1331,6 +1333,7 @@ static void unmap_single_vma(struct mmu_gather *tlb,
 
 	if (vma->vm_file)
 		uprobe_munmap(vma, start, end);
+	trace_munmap_vma(vma, "unmap_single_vma");  //pjh
 
 	if (unlikely(vma->vm_flags & VM_PFNMAP))
 		untrack_pfn(vma, 0, 0);

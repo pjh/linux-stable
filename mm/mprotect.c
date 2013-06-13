@@ -312,7 +312,7 @@ success:
 	vm_stat_account(mm, oldflags, vma->vm_file, -nrpages);
 	vm_stat_account(mm, newflags, vma->vm_file, nrpages);
 	perf_event_mmap(vma);
-	trace_mmap_vma(vma);  //pjh
+	trace_mmap_vma(vma, "mprotect_fixup");  //pjh
 	return 0;
 
 fail:

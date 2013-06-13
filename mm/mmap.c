@@ -722,10 +722,13 @@ again:			remove_next = 1 + (end > next->vm_end);
 		if (!(vma->vm_flags & VM_NONLINEAR)) {
 			root = &mapping->i_mmap;
 			uprobe_munmap(vma, vma->vm_start, vma->vm_end);
+			trace_munmap_vma(vma, "vma_adjust-vma");  //pjh
 
-			if (adjust_next)
+			if (adjust_next) {
 				uprobe_munmap(next, next->vm_start,
 							next->vm_end);
+				trace_munmap_vma(next, "vma_adjust-next1");  //pjh
+			}
 		}
 
 		mutex_lock(&mapping->i_mmap_mutex);
@@ -819,14 +822,18 @@ again:			remove_next = 1 + (end > next->vm_end);
 
 	if (root) {
 		uprobe_mmap(vma);
+		trace_mmap_vma(vma, "vma_adjust-vma");  //pjh
 
-		if (adjust_next)
+		if (adjust_next) {
 			uprobe_mmap(next);
+			trace_mmap_vma(next, "vma_adjust-next");  //pjh
+		}
 	}
 
 	if (remove_next) {
 		if (file) {
 			uprobe_munmap(next, next->vm_start, next->vm_end);
+			trace_munmap_vma(next, "vma_adjust-next2");  //pjh
 			fput(file);
 		}
 		if (next->anon_vma)
@@ -847,8 +854,10 @@ again:			remove_next = 1 + (end > next->vm_end);
 		else
 			mm->highest_vm_end = end;
 	}
-	if (insert && file)
+	if (insert && file) {
 		uprobe_mmap(insert);
+		trace_mmap_vma(insert, "vma_adjust-insert");  //pjh
+	}
 
 	validate_mm(mm);
 
@@ -1555,7 +1564,7 @@ munmap_back:
 		atomic_inc(&inode->i_writecount);
 out:
 	perf_event_mmap(vma);
-	trace_mmap_vma(vma);  //pjh
+	trace_mmap_vma(vma, "mmap_region");  //pjh
 
 	vm_stat_account(mm, vm_flags, file, len >> PAGE_SHIFT);
 	if (vm_flags & VM_LOCKED) {
@@ -2122,7 +2131,7 @@ int expand_upwards(struct vm_area_struct *vma, unsigned long address)
 				spin_unlock(&vma->vm_mm->page_table_lock);
 
 				perf_event_mmap(vma);
-				trace_mmap_vma(vma);  //pjh
+				trace_mmap_vma(vma, "expand_upwards");  //pjh
 			}
 		}
 	}
@@ -2192,7 +2201,7 @@ int expand_downwards(struct vm_area_struct *vma,
 				spin_unlock(&vma->vm_mm->page_table_lock);
 
 				perf_event_mmap(vma);
-				trace_mmap_vma(vma);  //pjh
+				trace_mmap_vma(vma, "expand_downwards");  //pjh
 			}
 		}
 	}
@@ -2646,7 +2655,7 @@ static unsigned long do_brk(unsigned long addr, unsigned long len)
 	vma_link(mm, vma, prev, rb_link, rb_parent);
 out:
 	perf_event_mmap(vma);
-	trace_mmap_vma(vma);  //pjh
+	trace_mmap_vma(vma, "do_brk");  //pjh
 	mm->total_vm += len >> PAGE_SHIFT;
 	if (flags & VM_LOCKED)
 		mm->locked_vm += (len >> PAGE_SHIFT);
@@ -2930,7 +2939,7 @@ int install_special_mapping(struct mm_struct *mm,
 	mm->total_vm += len >> PAGE_SHIFT;
 
 	perf_event_mmap(vma);
-	trace_mmap_vma(vma);  //pjh
+	trace_mmap_vma(vma, "install_special_mapping");  //pjh
 
 	return 0;
 
