@@ -2474,7 +2474,7 @@ static int __split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 	/* PJH: vma_adjust is used to adjust the tree when start / end / etc. are
 	 * changed for a vma. vma_adjust will modify the vm_start / vm_end /
 	 * pgoff of "vma", and possibly the vm_start / pgoff of vma->vm_next as
-	 * well. Additionall, it will insert "new" into the vma tree / list /
+	 * well. Additionally, it will insert "new" into the vma tree / list /
 	 * etc.
 	 *
 	 * All of the necessary tracing is now done in vma_adjust; it will capture

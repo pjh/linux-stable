@@ -752,6 +752,9 @@ static int mbind_range(struct mm_struct *mm, unsigned long start,
 			if (err)
 				goto out;
 		}
+		/* PJH: unmap-then-remap is done around vma change inside of
+		 * vma_replace_policy().
+		 */
 		err = vma_replace_policy(vma, new_pol);
 		if (err)
 			goto out;
