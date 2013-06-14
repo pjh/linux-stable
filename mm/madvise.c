@@ -123,10 +123,22 @@ static long madvise_behavior(struct vm_area_struct * vma,
 	}
 
 success:
+	/* PJH: the vma's flags are changing here, so need to "unmap" vma
+	 * before the change, and then map it again after the change. I don't
+	 * think that my code currently cares about any of the flags that
+	 * are actually changed in this function, but maybe in the future...
+	 *
+	 * Any vm_start / vm_end / merge / split changes will have already
+	 * been traced in vma_merge() and split_vma().
+	 */
+	trace_munmap_vma(vma, "madvise_behavior");
+
 	/*
 	 * vm_flags is protected by the mmap_sem held in write mode.
 	 */
 	vma->vm_flags = new_flags;
+	
+	trace_mmap_vma(vma, "madvise_behavior");
 
 out:
 	if (error == -ENOMEM)

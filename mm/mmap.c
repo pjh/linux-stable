@@ -241,6 +241,24 @@ static struct vm_area_struct *remove_vma(struct vm_area_struct *vma)
 {
 	struct vm_area_struct *next = vma->vm_next;
 
+	/* PJH: as far as I can tell, all code paths that remove vmas from
+	 * the mm->mmap end up calling remove_vma() (or remove_vma_list(),
+	 * which calls remove_vma()) on the removed vma[s] at some point.
+	 * These code paths are not numerous, just:
+	 *   ... -> do_munmap()
+	 *   ... -> exit_mmap()
+	 * Are there other functions / code paths that remove / "detach" vmas
+	 * from mm->mmap? Possibly, but I haven't found them yet.
+	 *
+	 * Putting the one-and-only trace_munmap_vma() call inside of
+	 * remove_vma() makes perfect sense if all code follows the invariant
+	 * that as soon as vmas are detached from mm->mmap, they are freed
+	 * (kmem_cache_free(vm_area_cachep, vma) below). I can't guarantee
+	 * that the code actually follows this invariant, but it would not
+	 * be unreasonable.
+	 */
+	trace_munmap_vma(vma, "remove_vma");
+
 	might_sleep();
 	if (vma->vm_ops && vma->vm_ops->close)
 		vma->vm_ops->close(vma);
@@ -1582,9 +1600,21 @@ munmap_back:
 	/* Once vma denies write, undo our temporary denial count */
 	if (correct_wcount)
 		atomic_inc(&inode->i_writecount);
+	
+	/* PJH: want this _before_ the out: section, so that it is only hit
+	 * when vma_merge() fails to expand an existing mapping to cover this
+	 * mmap request. When vma_merge() succeeds, I think/hope that the proper
+	 * trace messages will have already been output from vma_adjust().
+	 *
+	 * NOTE: actually, the vma is modified further in the out: section, but
+	 * it's just one flag that we don't care about... if we did care about
+	 * it, then we might have to do the unmap-then-remap around the
+	 * change, like is done in madvise_behavior() and other functions...
+	 */
+	trace_mmap_vma(vma, "mmap_region");  //pjh
+
 out:
 	perf_event_mmap(vma);
-	trace_mmap_vma(vma, "mmap_region");  //pjh
 
 	vm_stat_account(mm, vm_flags, file, len >> PAGE_SHIFT);
 	if (vm_flags & VM_LOCKED) {
@@ -2684,9 +2714,14 @@ static unsigned long do_brk(unsigned long addr, unsigned long len)
 	vma->vm_flags = flags;
 	vma->vm_page_prot = vm_get_page_prot(flags);
 	vma_link(mm, vma, prev, rb_link, rb_parent);
+
+	/* PJH: only trace when vma_merge() does not expand an existing
+	 * mapping! vma is not otherwise modified on out: path below.
+	 */
+	trace_mmap_vma(vma, "do_brk");  //pjh
+
 out:
 	perf_event_mmap(vma);
-	trace_mmap_vma(vma, "do_brk");  //pjh
 	mm->total_vm += len >> PAGE_SHIFT;
 	if (flags & VM_LOCKED)
 		mm->locked_vm += (len >> PAGE_SHIFT);
@@ -2865,6 +2900,11 @@ struct vm_area_struct *copy_vma(struct vm_area_struct **vmap,
 				new_vma->vm_ops->open(new_vma);
 			vma_link(mm, new_vma, prev, rb_link, rb_parent);
 			*need_rmap_locks = false;
+
+			/* PJH: trace at end, of course. This trace event is not
+			 * emitted in the case where vma_merge() succeeds above.
+			 */
+			trace_mmap_vma(new_vma, "copy_vma");  //pjh
 		}
 	}
 	return new_vma;

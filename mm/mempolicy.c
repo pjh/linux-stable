@@ -686,9 +686,17 @@ static int vma_replace_policy(struct vm_area_struct *vma,
 			goto err_out;
 	}
 
+	/* PJH: vma modification: unmap it before change, then remap it after
+	 * change. My code currently doesn't care at all about NUMA policy,
+	 * but who knows about the future...
+	 */
+	trace_munmap_vma(vma, "vma_replace_policy");
+
 	old = vma->vm_policy;
 	vma->vm_policy = new; /* protected by mmap_sem */
 	mpol_put(old);
+	
+	trace_mmap_vma(vma, "vma_replace_policy");
 
 	return 0;
  err_out:

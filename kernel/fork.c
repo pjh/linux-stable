@@ -81,8 +81,8 @@
 #include <trace/events/sched.h>
 
 #define CREATE_TRACE_POINTS
+#include <trace/events/mmap.h>
 #include <trace/events/task.h>
-
 /*
  * Protected counters by write_lock_irq(&tasklist_lock)
  */
@@ -459,6 +459,14 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 
 		if (tmp->vm_ops && tmp->vm_ops->open)
 			tmp->vm_ops->open(tmp);
+
+		/* PJH: trace after everything has already been set, of course.
+		 * QUESTION: does this dup_mmap() run in the context of the forked
+		 * child process, or the forking parent process? Hopefully the
+		 * former... if the latter, then may want to trace somewhere after
+		 * the child process first starts running, or something...
+		 */
+		trace_mmap_vma(tmp, "dup_mmap");
 
 		if (retval)
 			goto out;

@@ -293,6 +293,11 @@ mprotect_fixup(struct vm_area_struct *vma, struct vm_area_struct **pprev,
 	}
 
 success:
+	/* PJH: vma modification: unmap before change, then remap after change.
+	 * See similar pattern in madvise_behavior(), etc.
+	 */
+	trace_munmap_vma(vma, "mprotect_fixup");  //pjh
+	
 	/*
 	 * vm_flags and vm_page_prot are protected by the mmap_sem
 	 * held in write mode.
@@ -312,7 +317,9 @@ success:
 	vm_stat_account(mm, oldflags, vma->vm_file, -nrpages);
 	vm_stat_account(mm, newflags, vma->vm_file, nrpages);
 	perf_event_mmap(vma);
+	
 	trace_mmap_vma(vma, "mprotect_fixup");  //pjh
+	
 	return 0;
 
 fail:

@@ -314,6 +314,11 @@ success:
 		nr_pages = -nr_pages;
 	mm->locked_vm += nr_pages;
 
+	/* PJH: vma modification: unmap before change, remap after change.
+	 * See madvise_behavior() and other functions that have similar pattern.
+	 */
+	trace_munmap_vma(vma, "mlock_fixup");
+
 	/*
 	 * vm_flags is protected by the mmap_sem held in write mode.
 	 * It's okay if try_to_unmap_one unmaps a page just after we
@@ -324,6 +329,8 @@ success:
 		vma->vm_flags = newflags;
 	else
 		munlock_vma_pages_range(vma, start, end);
+	
+	trace_mmap_vma(vma, "mlock_fixup");
 
 out:
 	*prev = vma;
