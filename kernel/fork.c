@@ -81,7 +81,7 @@
 #include <trace/events/sched.h>
 
 #define CREATE_TRACE_POINTS
-#include <trace/events/mmap.h>
+//\/#include <trace/events/mmap.h>
 #include <trace/events/task.h>
 /*
  * Protected counters by write_lock_irq(&tasklist_lock)
@@ -466,7 +466,7 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 		 * former... if the latter, then may want to trace somewhere after
 		 * the child process first starts running, or something...
 		 */
-		trace_mmap_vma(tmp, "dup_mmap");
+		//\/trace_mmap_vma(tmp, "dup_mmap");
 
 		if (retval)
 			goto out;

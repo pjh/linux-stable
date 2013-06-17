@@ -19,6 +19,7 @@
 #include <linux/blkdev.h>
 #include <linux/swap.h>
 #include <linux/swapops.h>
+#include <trace/events/mmap.h>
 
 /*
  * Any behaviour which results in changes to the vma->vm_flags needs to

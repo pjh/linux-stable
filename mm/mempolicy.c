@@ -96,6 +96,8 @@
 #include <asm/uaccess.h>
 #include <linux/random.h>
 
+#include <trace/events/mmap.h>
+
 #include "internal.h"
 
 /* Internal flags */

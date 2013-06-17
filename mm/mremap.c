@@ -25,6 +25,8 @@
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
 
+#include <trace/events/mmap.h>
+
 #include "internal.h"
 
 static pmd_t *get_old_pmd(struct mm_struct *mm, unsigned long addr)
