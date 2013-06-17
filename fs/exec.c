@@ -64,7 +64,7 @@
 #include "internal.h"
 #include "coredump.h"
 
-//\/#include <trace/events/mmap.h>
+#include <trace/events/mmap.h>
 #include <trace/events/sched.h>
 
 int suid_dumpable = 0;
@@ -273,7 +273,7 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 	err = insert_vm_struct(mm, vma);
 	if (err)
 		goto err;
-	//\/trace_mmap_vma(vma, "__bprm_mm_init");
+	trace_mmap_vma(vma, "__bprm_mm_init");
 
 	mm->stack_vm = mm->total_vm = 1;
 	up_write(&mm->mmap_sem);
