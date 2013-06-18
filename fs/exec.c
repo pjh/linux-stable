@@ -716,8 +716,15 @@ int setup_arg_pages(struct linux_binprm *bprm,
 			goto out_unlock;
 	}
 
+	/* PJH: we don't care about this flag at the moment, but might as well:
+	 * unmap vma before change, remap vma after change.
+	 */
+	trace_munmap_vma(vma, "setup_arg_pages");  //pjh
+
 	/* mprotect_fixup is overkill to remove the temporary stack flags */
 	vma->vm_flags &= ~VM_STACK_INCOMPLETE_SETUP;
+	
+	trace_mmap_vma(vma, "setup_arg_pages");  //pjh
 
 	stack_expand = 131072UL; /* randomly 32*4k (or 2*64k) pages */
 	stack_size = vma->vm_end - vma->vm_start;
