@@ -26,9 +26,10 @@
 
 TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 
-	TP_PROTO(struct vm_area_struct *vma, const char *label),
+	TP_PROTO(struct task_struct *cur_task, struct vm_area_struct *vma,
+		const char *label),
 
-	TP_ARGS(vma, label),  // names of args in TP_PROTO
+	TP_ARGS(cur_task, vma, label),  // names of args in TP_PROTO
 
 	/* Rather than just copying the vm_area_struct *vma pointer, we must
 	 * copy all of the field values that we'll need into the ring buffer
@@ -38,6 +39,8 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 	 * kmem.h events file doesn't dereference any pointers in its printk).
 	 */
 	TP_STRUCT__entry(
+		__field(pid_t, pid)
+		__field(pid_t, tgid)
 		__array(char, label, PJH_BUF_LEN)
 		__field(struct vm_area_struct *, vma)
 		__field(unsigned long, vm_start)
@@ -52,6 +55,8 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 	),
 
 	TP_fast_assign(
+		__entry->pid = cur_task->pid;
+		__entry->tgid = cur_task->tgid;
 		strncpy(__entry->label, label, PJH_BUF_LEN-1);
 		__entry->label[PJH_BUF_LEN-1] = '\0';  //defensive
 		__entry->vma = vma;
@@ -101,7 +106,9 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 	 * Imitate printing of a vma entry in fs/proc/task_mmu.c:show_map_vma().
 	 *   00400000-0040c000 r-xp 00000000 fd:01 41038  /bin/cat
 	 */
-	TP_printk("%s: %p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
+	TP_printk("pid=%d tgid=%d [%s]: %p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
+		__entry->pid,
+		__entry->tgid,
 		__entry->label,
 		__entry->vma,
 		__entry->vm_start,
@@ -120,9 +127,10 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 
 TRACE_EVENT(munmap_vma,  // creates a function "trace_munmap_vma"
 
-	TP_PROTO(struct vm_area_struct *vma, const char *label),
+	TP_PROTO(struct task_struct *cur_task, struct vm_area_struct *vma,
+		const char *label),
 
-	TP_ARGS(vma, label),  // names of args in TP_PROTO
+	TP_ARGS(cur_task, vma, label),  // names of args in TP_PROTO
 
 	/* Rather than just copying the vm_area_struct *vma pointer, we must
 	 * copy all of the field values that we'll need into the ring buffer
@@ -132,6 +140,8 @@ TRACE_EVENT(munmap_vma,  // creates a function "trace_munmap_vma"
 	 * kmem.h events file doesn't dereference any pointers in its printk).
 	 */
 	TP_STRUCT__entry(
+		__field(pid_t, pid)
+		__field(pid_t, tgid)
 		__array(char, label, PJH_BUF_LEN)
 		__field(struct vm_area_struct *, vma)
 		__field(unsigned long, vm_start)
@@ -146,6 +156,8 @@ TRACE_EVENT(munmap_vma,  // creates a function "trace_munmap_vma"
 	),
 
 	TP_fast_assign(
+		__entry->pid = cur_task->pid;
+		__entry->tgid = cur_task->tgid;
 		strncpy(__entry->label, label, PJH_BUF_LEN-1);
 		__entry->label[PJH_BUF_LEN-1] = '\0';  //defensive
 		__entry->vma = vma;
@@ -195,7 +207,9 @@ TRACE_EVENT(munmap_vma,  // creates a function "trace_munmap_vma"
 	 * Imitate printing of a vma entry in fs/proc/task_mmu.c:show_map_vma().
 	 *   00400000-0040c000 r-xp 00000000 fd:01 41038  /bin/cat
 	 */
-	TP_printk("%s: %p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
+	TP_printk("pid=%d tgid=%d [%s]: %p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
+		__entry->pid,
+		__entry->tgid,
 		__entry->label,
 		__entry->vma,
 		__entry->vm_start,

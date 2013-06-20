@@ -692,13 +692,13 @@ static int vma_replace_policy(struct vm_area_struct *vma,
 	 * change. My code currently doesn't care at all about NUMA policy,
 	 * but who knows about the future...
 	 */
-	trace_munmap_vma(vma, "vma_replace_policy");
+	trace_munmap_vma(current, vma, "vma_replace_policy");
 
 	old = vma->vm_policy;
 	vma->vm_policy = new; /* protected by mmap_sem */
 	mpol_put(old);
 	
-	trace_mmap_vma(vma, "vma_replace_policy");
+	trace_mmap_vma(current, vma, "vma_replace_policy");
 
 	return 0;
  err_out:

@@ -467,7 +467,7 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 		 * former... if the latter, then may want to trace somewhere after
 		 * the child process first starts running, or something...
 		 */
-		trace_mmap_vma(tmp, "dup_mmap");
+		trace_mmap_vma(current, tmp, "dup_mmap");
 
 		if (retval)
 			goto out;

@@ -318,7 +318,7 @@ success:
 	/* PJH: vma modification: unmap before change, remap after change.
 	 * See madvise_behavior() and other functions that have similar pattern.
 	 */
-	trace_munmap_vma(vma, "mlock_fixup");
+	trace_munmap_vma(current, vma, "mlock_fixup");
 
 	/*
 	 * vm_flags is protected by the mmap_sem held in write mode.
@@ -331,7 +331,7 @@ success:
 	else
 		munlock_vma_pages_range(vma, start, end);
 	
-	trace_mmap_vma(vma, "mlock_fixup");
+	trace_mmap_vma(current, vma, "mlock_fixup");
 
 out:
 	*prev = vma;
