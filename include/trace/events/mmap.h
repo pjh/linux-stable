@@ -226,6 +226,45 @@ TRACE_EVENT(munmap_vma,  // creates a function "trace_munmap_vma"
 		)
 );
 
+TRACE_EVENT(mmap_disable_sim,   //trace_mmap_disable_sim("");
+	TP_PROTO(const char *descr),
+	TP_ARGS(descr),
+	TP_STRUCT__entry(
+		__array(char, descr, PJH_BUF_LEN)
+	),
+	TP_fast_assign(
+		strncpy(__entry->descr, descr, PJH_BUF_LEN-1);
+		__entry->descr[PJH_BUF_LEN-1] = '\0';  //defensive
+	),
+	TP_printk("%s", __entry->descr)
+);
+
+TRACE_EVENT(mmap_enable_sim,   //trace_mmap_enable_sim("");
+	TP_PROTO(const char *descr),
+	TP_ARGS(descr),
+	TP_STRUCT__entry(
+		__array(char, descr, PJH_BUF_LEN)
+	),
+	TP_fast_assign(
+		strncpy(__entry->descr, descr, PJH_BUF_LEN-1);
+		__entry->descr[PJH_BUF_LEN-1] = '\0';  //defensive
+	),
+	TP_printk("%s", __entry->descr)
+);
+
+TRACE_EVENT(mmap_printk,   //trace_mmap_printk("");
+	TP_PROTO(const char *msg),
+	TP_ARGS(msg),
+	TP_STRUCT__entry(
+		__array(char, msg, PJH_BUF_LEN)
+	),
+	TP_fast_assign(
+		strncpy(__entry->msg, msg, PJH_BUF_LEN-1);
+		__entry->msg[PJH_BUF_LEN-1] = '\0';  //defensive
+	),
+	TP_printk("%s", __entry->msg)
+);
+
 #endif /* _TRACE_MMAP_H */
 
 /* This part must be outside protection */

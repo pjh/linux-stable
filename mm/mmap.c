@@ -691,8 +691,6 @@ int vma_adjust(struct vm_area_struct *vma, unsigned long start,
 	long adjust_next = 0;
 	int remove_next = 0;
 
-	//trace_munmap_vma(current, vma, "vma_adjust-vma-early");  //pjh
-
 	/* PJH: if insert is non-NULL, then the other existing vm_area_structs
 	 * (besides vma) are never modified. This is because insert is only
 	 * non-NULL when called from __split_vma(), which strictly splits an
@@ -742,7 +740,7 @@ again:			remove_next = 1 + (end > next->vm_end);
 		 */
 		if (exporter && exporter->anon_vma && !importer->anon_vma) {
 			if (anon_vma_clone(importer, exporter)) {
-				trace_printk("pjh: vma_adjust: returning -ENOMEM\n");
+				trace_mmap_printk("pjh: vma_adjust: returning -ENOMEM");
 				return -ENOMEM;
 			}
 			importer->anon_vma = exporter->anon_vma;
@@ -872,7 +870,6 @@ again:			remove_next = 1 + (end > next->vm_end);
 			uprobe_mmap(next);
 	}
 
-	//trace_mmap_vma(current, vma, "vma_adjust-vma-late");  //pjh
 	if (remove_next) {
 		if (file) {
 			uprobe_munmap(next, next->vm_start, next->vm_end);
@@ -1052,11 +1049,14 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 				is_mergeable_anon_vma(prev->anon_vma,
 						      next->anon_vma, NULL)) {
 							/* cases 1, 6 */
+			//trace_mmap_printk("pjh: vma_merge() -> vma_adjust() 1");
 			err = vma_adjust(prev, prev->vm_start,
 				next->vm_end, prev->vm_pgoff, NULL);
-		} else					/* cases 2, 5, 7 */
+		} else {					/* cases 2, 5, 7 */
+			//trace_mmap_printk("pjh: vma_merge() -> vma_adjust() 2");
 			err = vma_adjust(prev, prev->vm_start,
 				end, prev->vm_pgoff, NULL);
+		}
 		if (err)
 			return NULL;
 		khugepaged_enter_vma_merge(prev);
@@ -1070,12 +1070,16 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
  			mpol_equal(policy, vma_policy(next)) &&
 			can_vma_merge_before(next, vm_flags,
 					anon_vma, file, pgoff+pglen)) {
-		if (prev && addr < prev->vm_end)	/* case 4 */
+		if (prev && addr < prev->vm_end) {	/* case 4 */
+			//trace_mmap_printk("pjh: vma_merge() -> vma_adjust() 3");
 			err = vma_adjust(prev, prev->vm_start,
 				addr, prev->vm_pgoff, NULL);
-		else					/* cases 3, 8 */
+		}
+		else {					/* cases 3, 8 */
+			//trace_mmap_printk("pjh: vma_merge() -> vma_adjust() 4");
 			err = vma_adjust(area, addr, next->vm_end,
 				next->vm_pgoff - pglen, NULL);
+		}
 		if (err)
 			return NULL;
 		khugepaged_enter_vma_merge(area);
@@ -2472,11 +2476,15 @@ static int __split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 	if (new->vm_ops && new->vm_ops->open)
 		new->vm_ops->open(new);
 
-	if (new_below)
+	if (new_below) {
+		//trace_mmap_printk("pjh: __split_vma() -> vma_adjust() 1");
 		err = vma_adjust(vma, addr, vma->vm_end, vma->vm_pgoff +
 			((addr - new->vm_start) >> PAGE_SHIFT), new);
-	else
+	}
+	else {
+		//trace_mmap_printk("pjh: __split_vma() -> vma_adjust() 2");
 		err = vma_adjust(vma, vma->vm_start, addr, vma->vm_pgoff, new);
+	}
 
 	/* PJH: vma_adjust is used to adjust the tree when start / end / etc. are
 	 * changed for a vma. vma_adjust will modify the vm_start / vm_end /

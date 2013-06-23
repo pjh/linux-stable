@@ -247,6 +247,8 @@ mprotect_fixup(struct vm_area_struct *vma, struct vm_area_struct **pprev,
 	int dirty_accountable = 0;
 
 	if (newflags == oldflags) {
+		trace_mmap_printk("pjh: mprotect_fixup(): newflags == oldflags, "
+			"returning");
 		*pprev = vma;
 		return 0;
 	}
@@ -271,9 +273,11 @@ mprotect_fixup(struct vm_area_struct *vma, struct vm_area_struct **pprev,
 	 * First try to merge with previous and/or next vma.
 	 */
 	pgoff = vma->vm_pgoff + ((start - vma->vm_start) >> PAGE_SHIFT);
+	//trace_mmap_printk("pjh: mprotect_fixup() -> vma_merge()");
 	*pprev = vma_merge(mm, *pprev, start, end, newflags,
 			vma->anon_vma, vma->vm_file, pgoff, vma_policy(vma));
 	if (*pprev) {
+		//trace_mmap_printk("pjh: mprotect_fixup(): vma_merge() succeeded");
 		vma = *pprev;
 		goto success;
 	}
@@ -281,12 +285,14 @@ mprotect_fixup(struct vm_area_struct *vma, struct vm_area_struct **pprev,
 	*pprev = vma;
 
 	if (start != vma->vm_start) {
+		//trace_mmap_printk("pjh: mprotect_fixup() -> split_vma() 1");
 		error = split_vma(mm, vma, start, 1);
 		if (error)
 			goto fail;
 	}
 
 	if (end != vma->vm_end) {
+		//trace_mmap_printk("pjh: mprotect_fixup() -> split_vma() 2");
 		error = split_vma(mm, vma, end, 0);
 		if (error)
 			goto fail;

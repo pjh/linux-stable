@@ -594,6 +594,22 @@ static int shift_arg_pages(struct vm_area_struct *vma, unsigned long shift)
 	if (vma != find_vma(mm, new_start))
 		return -EFAULT;
 
+	/* PJH: these two calls to vma_adjust lead to "allocations" of huge
+	 * virtual address regions, when in fact this code is simply
+	 * *relocating* a region in the virtual address space. To avoid
+	 * the temporary presence of a huge vma caused by the *two* vma_adjust()
+	 * calls here, instead we unmap the vma before the first adjust, then
+	 * call another trace event to disable my simulation code, then call
+	 * the two adjusts, then re-enable my simulation code and remap the
+	 * vma.
+	 *   Still need to think about: what would it mean to try to do this
+	 *   in a segmented system?? It could be replaced with an actual
+	 *   "relocate-vma" function or "copy-vma" function that would avoid
+	 *   the need to have the entire region mapped all at once, I think...
+	 */
+	trace_munmap_vma(current, vma, "shift_arg_pages");  //pjh
+	trace_mmap_disable_sim("shift_arg_pages");
+
 	/*
 	 * cover the whole range: [new_start, old_end)
 	 */
@@ -632,6 +648,12 @@ static int shift_arg_pages(struct vm_area_struct *vma, unsigned long shift)
 	 * Shrink the vma to just the new range.  Always succeeds.
 	 */
 	vma_adjust(vma, new_start, new_end, vma->vm_pgoff, NULL);
+
+	/* PJH: ok, now re-enable my simulation code, and re-map the vma
+	 * that was relocated by the two vma_adjust() calls.
+	 */
+	trace_mmap_enable_sim("shift_arg_pages");
+	trace_mmap_vma(current, vma, "shift_arg_pages");  //pjh
 
 	return 0;
 }
@@ -703,6 +725,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	vm_flags |= mm->def_flags;
 	vm_flags |= VM_STACK_INCOMPLETE_SETUP;
 
+	//trace_mmap_printk("pjh: setup_arg_pages() -> mprotect_fixup()");
 	ret = mprotect_fixup(vma, &prev, vma->vm_start, vma->vm_end,
 			vm_flags);
 	if (ret)
@@ -711,6 +734,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 
 	/* Move stack pages down in memory. */
 	if (stack_shift) {
+		//trace_mmap_printk("pjh: setup_arg_pages() -> shift_arg_pages()");
 		ret = shift_arg_pages(vma, stack_shift);
 		if (ret)
 			goto out_unlock;
