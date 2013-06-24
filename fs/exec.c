@@ -273,7 +273,7 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 	err = insert_vm_struct(mm, vma);
 	if (err)
 		goto err;
-	trace_mmap_vma(current, vma, "__bprm_mm_init");
+	trace_mmap_vma_alloc(current, vma, "__bprm_mm_init");
 
 	mm->stack_vm = mm->total_vm = 1;
 	up_write(&mm->mmap_sem);
@@ -606,14 +606,20 @@ static int shift_arg_pages(struct vm_area_struct *vma, unsigned long shift)
 	 *   in a segmented system?? It could be replaced with an actual
 	 *   "relocate-vma" function or "copy-vma" function that would avoid
 	 *   the need to have the entire region mapped all at once, I think...
+	 *
+	 * Note: I double-checked this function, and it is ALWAYS true that
+	 * the size of the relocated vma is exactly the same as the size of
+	 * the original vma - new_start and new_end never change in this
+	 * function once they are adjusted by "shift" bytes.
 	 */
-	trace_munmap_vma(current, vma, "shift_arg_pages");  //pjh
+	trace_mmap_vma_reloc_unmap(current, vma, "shift_arg_pages");  //pjh
 	trace_mmap_disable_sim("shift_arg_pages");
 
 	/*
 	 * cover the whole range: [new_start, old_end)
 	 */
-	if (vma_adjust(vma, new_start, old_end, vma->vm_pgoff, NULL))
+	if (vma_adjust(vma, new_start, old_end, vma->vm_pgoff, NULL,
+		"shift_arg_pages [new_start, old_end) -> vma_adjust"))
 		return -ENOMEM;
 
 	/*
@@ -647,13 +653,14 @@ static int shift_arg_pages(struct vm_area_struct *vma, unsigned long shift)
 	/*
 	 * Shrink the vma to just the new range.  Always succeeds.
 	 */
-	vma_adjust(vma, new_start, new_end, vma->vm_pgoff, NULL);
+	vma_adjust(vma, new_start, new_end, vma->vm_pgoff, NULL,
+		"shift_arg_pages [new_start, new_end) -> vma_adjust");
 
 	/* PJH: ok, now re-enable my simulation code, and re-map the vma
 	 * that was relocated by the two vma_adjust() calls.
 	 */
 	trace_mmap_enable_sim("shift_arg_pages");
-	trace_mmap_vma(current, vma, "shift_arg_pages");  //pjh
+	trace_mmap_vma_reloc_remap(current, vma, "shift_arg_pages");  //pjh
 
 	return 0;
 }
@@ -743,12 +750,12 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	/* PJH: we don't care about this flag at the moment, but might as well:
 	 * unmap vma before change, remap vma after change.
 	 */
-	trace_munmap_vma(current, vma, "setup_arg_pages");  //pjh
+	trace_mmap_vma_flags_unmap(current, vma, "setup_arg_pages");  //pjh
 
 	/* mprotect_fixup is overkill to remove the temporary stack flags */
 	vma->vm_flags &= ~VM_STACK_INCOMPLETE_SETUP;
 	
-	trace_mmap_vma(current, vma, "setup_arg_pages");  //pjh
+	trace_mmap_vma_flags_remap(current, vma, "setup_arg_pages");  //pjh
 
 	stack_expand = 131072UL; /* randomly 32*4k (or 2*64k) pages */
 	stack_size = vma->vm_end - vma->vm_start;

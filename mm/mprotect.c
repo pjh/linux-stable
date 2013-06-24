@@ -302,7 +302,7 @@ success:
 	/* PJH: vma modification: unmap before change, then remap after change.
 	 * See similar pattern in madvise_behavior(), etc.
 	 */
-	trace_munmap_vma(current, vma, "mprotect_fixup");  //pjh
+	trace_mmap_vma_access_unmap(current, vma, "mprotect_fixup");  //pjh
 	
 	/*
 	 * vm_flags and vm_page_prot are protected by the mmap_sem
@@ -324,7 +324,7 @@ success:
 	vm_stat_account(mm, newflags, vma->vm_file, nrpages);
 	perf_event_mmap(vma);
 	
-	trace_mmap_vma(current, vma, "mprotect_fixup");  //pjh
+	trace_mmap_vma_access_remap(current, vma, "mprotect_fixup");  //pjh
 	
 	return 0;
 

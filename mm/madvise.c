@@ -132,14 +132,14 @@ success:
 	 * Any vm_start / vm_end / merge / split changes will have already
 	 * been traced in vma_merge() and split_vma().
 	 */
-	trace_munmap_vma(current, vma, "madvise_behavior");
+	trace_mmap_vma_flags_unmap(current, vma, "madvise_behavior");
 
 	/*
 	 * vm_flags is protected by the mmap_sem held in write mode.
 	 */
 	vma->vm_flags = new_flags;
 	
-	trace_mmap_vma(current, vma, "madvise_behavior");
+	trace_mmap_vma_flags_remap(current, vma, "madvise_behavior");
 
 out:
 	if (error == -ENOMEM)

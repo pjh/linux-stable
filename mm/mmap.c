@@ -250,14 +250,14 @@ static struct vm_area_struct *remove_vma(struct vm_area_struct *vma)
 	 * Are there other functions / code paths that remove / "detach" vmas
 	 * from mm->mmap? Possibly, but I haven't found them yet.
 	 *
-	 * Putting the one-and-only trace_munmap_vma() call inside of
+	 * Putting the one-and-only trace_mmap_vma_free() call inside of
 	 * remove_vma() makes perfect sense if all code follows the invariant
 	 * that as soon as vmas are detached from mm->mmap, they are freed
 	 * (kmem_cache_free(vm_area_cachep, vma) below). I can't guarantee
 	 * that the code actually follows this invariant, but it would not
 	 * be unreasonable.
 	 */
-	trace_munmap_vma(current, vma, "remove_vma");
+	trace_mmap_vma_free(current, vma, "remove_vma");
 
 	might_sleep();
 	if (vma->vm_ops && vma->vm_ops->close)
@@ -679,7 +679,8 @@ __vma_unlink(struct mm_struct *mm, struct vm_area_struct *vma,
  * before we drop the necessary locks.
  */
 int vma_adjust(struct vm_area_struct *vma, unsigned long start,
-	unsigned long end, pgoff_t pgoff, struct vm_area_struct *insert)
+	unsigned long end, pgoff_t pgoff, struct vm_area_struct *insert,
+	const char *descr)
 {
 	struct mm_struct *mm = vma->vm_mm;
 	struct vm_area_struct *next = vma->vm_next;
@@ -740,7 +741,8 @@ again:			remove_next = 1 + (end > next->vm_end);
 		 */
 		if (exporter && exporter->anon_vma && !importer->anon_vma) {
 			if (anon_vma_clone(importer, exporter)) {
-				trace_mmap_printk("pjh: vma_adjust: returning -ENOMEM");
+				//trace_mmap_printk("pjh: %s: returning -ENOMEM", descr);//nope
+				trace_printk("pjh: %s: returning -ENOMEM", descr);
 				return -ENOMEM;
 			}
 			importer->anon_vma = exporter->anon_vma;
@@ -797,7 +799,7 @@ again:			remove_next = 1 + (end > next->vm_end);
 	 *   For simplicity, just _always_ unmap, then map again, even if start
 	 *   isn't going to change.
 	 */
-	trace_munmap_vma(current, vma, "vma_adjust-vma");  //pjh
+	trace_mmap_vma_resize_unmap(current, vma, descr);  //pjh
 	if (start != vma->vm_start) {
 		vma->vm_start = start;
 		start_changed = true;
@@ -807,12 +809,12 @@ again:			remove_next = 1 + (end > next->vm_end);
 		end_changed = true;
 	}
 	vma->vm_pgoff = pgoff;
-	trace_mmap_vma(current, vma, "vma_adjust-vma");  //pjh
+	trace_mmap_vma_resize_remap(current, vma, descr);  //pjh
 	if (adjust_next) {
-		trace_munmap_vma(current, next, "vma_adjust-adjust_next");  //pjh
+		trace_mmap_vma_resize_unmap(current, next, descr);  //pjh
 		next->vm_start += adjust_next << PAGE_SHIFT;
 		next->vm_pgoff += adjust_next;
-		trace_mmap_vma(current, next, "vma_adjust-adjust_next");  //pjh
+		trace_mmap_vma_resize_remap(current, next, descr);  //pjh
 	}
 
 	if (root) {
@@ -824,7 +826,7 @@ again:			remove_next = 1 + (end > next->vm_end);
 
 	if (remove_next) {
 		/* PJH: trace _before_ removal, in case something is unset after */
-		trace_munmap_vma(current, next, "vma_adjust-remove_next");  //pjh
+		trace_mmap_vma_free(current, next, descr);  //pjh
 
 		/*
 		 * vma_merge has merged next into vma, and needs
@@ -842,7 +844,7 @@ again:			remove_next = 1 + (end > next->vm_end);
 		__insert_vm_struct(mm, insert);
 
 		/* PJH: trace _after_ insertion, in case something isn't set earlier */
-		trace_mmap_vma(current, insert, "vma_adjust-insert");  //pjh
+		trace_mmap_vma_alloc(current, insert, descr);  //pjh
 	} else {
 		if (start_changed)
 			vma_gap_update(vma);
@@ -1051,11 +1053,13 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 							/* cases 1, 6 */
 			//trace_mmap_printk("pjh: vma_merge() -> vma_adjust() 1");
 			err = vma_adjust(prev, prev->vm_start,
-				next->vm_end, prev->vm_pgoff, NULL);
+				next->vm_end, prev->vm_pgoff, NULL,
+				"vma_merge cases 1,6 -> vma_adjust");
 		} else {					/* cases 2, 5, 7 */
 			//trace_mmap_printk("pjh: vma_merge() -> vma_adjust() 2");
 			err = vma_adjust(prev, prev->vm_start,
-				end, prev->vm_pgoff, NULL);
+				end, prev->vm_pgoff, NULL,
+				"vma_merge cases 2,5,7 -> vma_adjust");
 		}
 		if (err)
 			return NULL;
@@ -1073,12 +1077,14 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 		if (prev && addr < prev->vm_end) {	/* case 4 */
 			//trace_mmap_printk("pjh: vma_merge() -> vma_adjust() 3");
 			err = vma_adjust(prev, prev->vm_start,
-				addr, prev->vm_pgoff, NULL);
+				addr, prev->vm_pgoff, NULL,
+				"vma_merge case 4 -> vma_adjust");
 		}
 		else {					/* cases 3, 8 */
 			//trace_mmap_printk("pjh: vma_merge() -> vma_adjust() 4");
 			err = vma_adjust(area, addr, next->vm_end,
-				next->vm_pgoff - pglen, NULL);
+				next->vm_pgoff - pglen, NULL,
+				"vma_merge cases 3,8 -> vma_adjust");
 		}
 		if (err)
 			return NULL;
@@ -1620,7 +1626,7 @@ munmap_back:
 	 * it, then we might have to do the unmap-then-remap around the
 	 * change, like is done in madvise_behavior() and other functions...
 	 */
-	trace_mmap_vma(current, vma, "mmap_region");  //pjh
+	trace_mmap_vma_alloc(current, vma, "mmap_region");  //pjh
 
 out:
 	perf_event_mmap(vma);
@@ -2168,7 +2174,8 @@ int expand_upwards(struct vm_area_struct *vma, unsigned long address)
 		if (vma->vm_pgoff + (size >> PAGE_SHIFT) >= vma->vm_pgoff) {
 			error = acct_stack_growth(vma, size, grow);
 			if (!error) {
-				trace_munmap_vma(current, vma, "expand_upwards");  //pjh
+				trace_mmap_vma_resize_unmap(current, vma,
+					"expand_upwards");  //pjh
 				/*
 				 * vma_gap_update() doesn't support concurrent
 				 * updates, but we only hold a shared mmap_sem
@@ -2191,7 +2198,8 @@ int expand_upwards(struct vm_area_struct *vma, unsigned long address)
 				spin_unlock(&vma->vm_mm->page_table_lock);
 
 				perf_event_mmap(vma);
-				trace_mmap_vma(current, vma, "expand_upwards");  //pjh
+				trace_mmap_vma_resize_remap(current, vma,
+					"expand_upwards");  //pjh
 			}
 		}
 	}
@@ -2241,7 +2249,8 @@ int expand_downwards(struct vm_area_struct *vma,
 		if (grow <= vma->vm_pgoff) {
 			error = acct_stack_growth(vma, size, grow);
 			if (!error) {
-				trace_munmap_vma(current, vma, "expand_downwards");  //pjh
+				trace_mmap_vma_resize_unmap(current, vma,
+					"expand_downwards");  //pjh
 				/*
 				 * vma_gap_update() doesn't support concurrent
 				 * updates, but we only hold a shared mmap_sem
@@ -2262,7 +2271,8 @@ int expand_downwards(struct vm_area_struct *vma,
 				spin_unlock(&vma->vm_mm->page_table_lock);
 
 				perf_event_mmap(vma);
-				trace_mmap_vma(current, vma, "expand_downwards");  //pjh
+				trace_mmap_vma_resize_remap(current, vma,
+					"expand_downwards");  //pjh
 			}
 		}
 	}
@@ -2479,11 +2489,13 @@ static int __split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 	if (new_below) {
 		//trace_mmap_printk("pjh: __split_vma() -> vma_adjust() 1");
 		err = vma_adjust(vma, addr, vma->vm_end, vma->vm_pgoff +
-			((addr - new->vm_start) >> PAGE_SHIFT), new);
+			((addr - new->vm_start) >> PAGE_SHIFT), new,
+			"__split_vma new_below -> vma_adjust");
 	}
 	else {
 		//trace_mmap_printk("pjh: __split_vma() -> vma_adjust() 2");
-		err = vma_adjust(vma, vma->vm_start, addr, vma->vm_pgoff, new);
+		err = vma_adjust(vma, vma->vm_start, addr, vma->vm_pgoff, new,
+			"__split_vma !new_below -> vma_adjust");
 	}
 
 	/* PJH: vma_adjust is used to adjust the tree when start / end / etc. are
@@ -2733,7 +2745,7 @@ static unsigned long do_brk(unsigned long addr, unsigned long len)
 	/* PJH: only trace when vma_merge() does not expand an existing
 	 * mapping! vma is not otherwise modified on out: path below.
 	 */
-	trace_mmap_vma(current, vma, "do_brk");  //pjh
+	trace_mmap_vma_alloc(current, vma, "do_brk");  //pjh
 
 out:
 	perf_event_mmap(vma);
@@ -2919,7 +2931,7 @@ struct vm_area_struct *copy_vma(struct vm_area_struct **vmap,
 			/* PJH: trace at end, of course. This trace event is not
 			 * emitted in the case where vma_merge() succeeds above.
 			 */
-			trace_mmap_vma(current, new_vma, "copy_vma");  //pjh
+			trace_mmap_vma_alloc(current, new_vma, "copy_vma");  //pjh
 		}
 	}
 	return new_vma;
@@ -3025,7 +3037,7 @@ int install_special_mapping(struct mm_struct *mm,
 	mm->total_vm += len >> PAGE_SHIFT;
 
 	perf_event_mmap(vma);
-	trace_mmap_vma(current, vma, "install_special_mapping");  //pjh
+	trace_mmap_vma_alloc(current, vma, "install_special_mapping");  //pjh
 
 	return 0;
 
