@@ -21,7 +21,7 @@
  * trace-events-sample.h
  */
 
-//#define PJH_FANCY
+#define PJH_FANCY
 #define PJH_BUF_LEN 256
 
 /* DESCRIPTION OF TRACE EVENTS:
@@ -90,12 +90,15 @@ DECLARE_EVENT_CLASS(mmap_vma,
 		if (vma->vm_file) {
 #ifdef PJH_FANCY
 			// Imitate: show_map_vma() calls seq_path() calls d_path()
-			char *p = d_path(vma->vm_file->f_path,
-				(char *)__entry->filename, PJH_BUF_LEN)
-			while (p > (char *)__entry->filename) {
+			char *p = d_path(&(vma->vm_file->f_path),
+				(char *)(__entry->filename), PJH_BUF_LEN);
+			while (p > (char *)(__entry->filename)) {
 				/* d_path() may return a pointer that is some distance into
 				 * the filename buffer, with the initial characters as 0
 				 * bytes. So, just replace them with spaces:
+				 *   Weird: looks like d_path() fills in the buffer from
+				 *   right-to-left, for some reason; this makes my output
+				 *   wicked annoying...
 				 */
 				p--;
 				*p = ' ';

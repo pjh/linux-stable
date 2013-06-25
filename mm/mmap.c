@@ -237,7 +237,8 @@ void unlink_file_vma(struct vm_area_struct *vma)
 /*
  * Close a vm structure and free it, returning the next.
  */
-static struct vm_area_struct *remove_vma(struct vm_area_struct *vma)
+static struct vm_area_struct *remove_vma(struct vm_area_struct *vma,
+	const char *descr)
 {
 	struct vm_area_struct *next = vma->vm_next;
 
@@ -257,7 +258,7 @@ static struct vm_area_struct *remove_vma(struct vm_area_struct *vma)
 	 * that the code actually follows this invariant, but it would not
 	 * be unreasonable.
 	 */
-	trace_mmap_vma_free(current, vma, "remove_vma");
+	trace_mmap_vma_free(current, vma, descr);
 
 	might_sleep();
 	if (vma->vm_ops && vma->vm_ops->close)
@@ -2365,7 +2366,8 @@ find_extend_vma(struct mm_struct * mm, unsigned long addr)
  *
  * Called with the mm semaphore held.
  */
-static void remove_vma_list(struct mm_struct *mm, struct vm_area_struct *vma)
+static void remove_vma_list(struct mm_struct *mm, struct vm_area_struct *vma,
+	const char *descr)
 {
 	unsigned long nr_accounted = 0;
 
@@ -2377,7 +2379,7 @@ static void remove_vma_list(struct mm_struct *mm, struct vm_area_struct *vma)
 		if (vma->vm_flags & VM_ACCOUNT)
 			nr_accounted += nrpages;
 		vm_stat_account(mm, vma->vm_flags, vma->vm_file, -nrpages);
-		vma = remove_vma(vma);
+		vma = remove_vma(vma, descr);
 	} while (vma);
 	vm_unacct_memory(nr_accounted);
 	validate_mm(mm);
@@ -2622,7 +2624,8 @@ int do_munmap(struct mm_struct *mm, unsigned long start, size_t len)
 	unmap_region(mm, vma, prev, start, end);
 
 	/* Fix up all other VM information */
-	remove_vma_list(mm, vma);
+	remove_vma_list(mm, vma,
+		"do_munmap -> remove_vma_list -> remove_vma");
 
 	return 0;
 }
@@ -2813,7 +2816,7 @@ void exit_mmap(struct mm_struct *mm)
 	while (vma) {
 		if (vma->vm_flags & VM_ACCOUNT)
 			nr_accounted += vma_pages(vma);
-		vma = remove_vma(vma);
+		vma = remove_vma(vma, "exit_mmap -> remove_vma");
 	}
 	vm_unacct_memory(nr_accounted);
 
