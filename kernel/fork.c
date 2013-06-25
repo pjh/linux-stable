@@ -345,7 +345,8 @@ free_tsk:
 }
 
 #ifdef CONFIG_MMU
-static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
+static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm,
+	struct task_struct *new_tsk)
 {
 	struct vm_area_struct *mpnt, *tmp, *prev, **pprev;
 	struct rb_node **rb_link, *rb_parent;
@@ -462,12 +463,16 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 			tmp->vm_ops->open(tmp);
 
 		/* PJH: trace after everything has already been set, of course.
-		 * QUESTION: does this dup_mmap() run in the context of the forked
-		 * child process, or the forking parent process? Hopefully the
-		 * former... if the latter, then may want to trace somewhere after
-		 * the child process first starts running, or something...
+		 * Unfortunately, this dup_mmap() runs in the context of the
+		 * forking parent process ("current" is the parent, not the child).
+		 * So, I added an argument to dup_mmap() for the task_struct of
+		 * the child process that is currently being created, and adjusted
+		 * the order of things in copy_process() so that the child's pid and
+		 * tgid should be set by the time this trace event is reached.
+		 * By passing new_tsk, rather than current, to trace_mmap_vma_alloc(),
+		 * the correct pid and tgid should now be captured... I hope.
 		 */
-		trace_mmap_vma_alloc(current, tmp, "dup_mmap");
+		trace_mmap_vma_alloc(new_tsk, tmp, "dup_mmap");
 
 		if (retval)
 			goto out;
@@ -504,7 +509,7 @@ static inline void mm_free_pgd(struct mm_struct *mm)
 	pgd_free(mm, mm->pgd);
 }
 #else
-#define dup_mmap(mm, oldmm)	(0)
+#define dup_mmap(mm, oldmm, tsk)	(0)
 #define mm_alloc_pgd(mm)	(0)
 #define mm_free_pgd(mm)
 #endif /* CONFIG_MMU */
@@ -843,7 +848,7 @@ struct mm_struct *dup_mm(struct task_struct *tsk)
 
 	dup_mm_exe_file(oldmm, mm);
 
-	err = dup_mmap(mm, oldmm);
+	err = dup_mmap(mm, oldmm, tsk);
 	if (err)
 		goto free_pt;
 
@@ -1338,19 +1343,27 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	retval = copy_signal(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_sighand;
-	retval = copy_mm(clone_flags, p);
-	if (retval)
-		goto bad_fork_cleanup_signal;
-	retval = copy_namespaces(clone_flags, p);
-	if (retval)
-		goto bad_fork_cleanup_mm;
-	retval = copy_io(clone_flags, p);
-	if (retval)
-		goto bad_fork_cleanup_namespaces;
-	retval = copy_thread(clone_flags, stack_start, stack_size, p);
-	if (retval)
-		goto bad_fork_cleanup_io;
-
+#define PJH_FORK
+#ifdef PJH_FORK
+	/* Move the code that sets the pid / tgid from below to right here, so
+	 * that I can access the pid / tgid from copy_mm() -> dup_mm() ->
+	 * dup_mmap(). I hope that changing this ordering doesn't mess up
+	 * anything else...
+	 *
+	 * If it does turn out that this approach doesn't work, an alternative
+	 * approach would be to add a "trace_mmap_vma_fork()" call in the
+	 * do_fork() function. However, the problem with that is that inside
+	 * of the trace event framework, there's no way to execute a loop
+	 * (i.e. to print out an event for every vma in the forked process'
+	 * new mmap). This means that trace_mmap_vma_fork() would have to
+	 * be called in a loop added to do_fork(); this isn't terribly
+	 * unreasonable, and should have minimal / no impact when trace
+	 * events are disabled I guess, but I'd like to avoid actually adding
+	 * to the kernel code paths (as opposed to just "rearranging" here...)
+	 * if at all possible. For that reason I chose this approach to start,
+	 * because it utilizes the loop over the mmap that is already performed
+	 * in dup_mmap(). 
+	 */
 	if (pid != &init_struct_pid) {
 		retval = -ENOMEM;
 		pid = alloc_pid(p->nsproxy->pid_ns);
@@ -1368,6 +1381,39 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * Clear TID on mm_release()?
 	 */
 	p->clear_child_tid = (clone_flags & CLONE_CHILD_CLEARTID) ? child_tidptr : NULL;
+#endif
+	retval = copy_mm(clone_flags, p);
+	if (retval)
+		goto bad_fork_cleanup_signal;
+	retval = copy_namespaces(clone_flags, p);
+	if (retval)
+		goto bad_fork_cleanup_mm;
+	retval = copy_io(clone_flags, p);
+	if (retval)
+		goto bad_fork_cleanup_namespaces;
+	retval = copy_thread(clone_flags, stack_start, stack_size, p);
+	if (retval)
+		goto bad_fork_cleanup_io;
+
+#ifndef PJH_FORK
+	if (pid != &init_struct_pid) {
+		retval = -ENOMEM;
+		pid = alloc_pid(p->nsproxy->pid_ns);
+		if (!pid)
+			goto bad_fork_cleanup_io;
+	}
+
+	p->pid = pid_nr(pid);
+	p->tgid = p->pid;
+	if (clone_flags & CLONE_THREAD)
+		p->tgid = current->tgid;
+
+	p->set_child_tid = (clone_flags & CLONE_CHILD_SETTID) ? child_tidptr : NULL;
+	/*
+	 * Clear TID on mm_release()?
+	 */
+	p->clear_child_tid = (clone_flags & CLONE_CHILD_CLEARTID) ? child_tidptr : NULL;
+#endif
 #ifdef CONFIG_BLOCK
 	p->plug = NULL;
 #endif
