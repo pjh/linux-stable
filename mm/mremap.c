@@ -514,7 +514,7 @@ SYSCALL_DEFINE5(mremap, unsigned long, addr, unsigned long, old_len,
 			int pages = (new_len - old_len) >> PAGE_SHIFT;
 
 			if (vma_adjust(vma, vma->vm_start, addr + new_len,
-				       vma->vm_pgoff, NULL, "sys_mremap -> vma_adjust")) {
+				   vma->vm_pgoff, NULL, "sys_mremap -> vma_adjust")) {
 				ret = -ENOMEM;
 				goto out;
 			}

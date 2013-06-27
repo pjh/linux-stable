@@ -732,7 +732,6 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	vm_flags |= mm->def_flags;
 	vm_flags |= VM_STACK_INCOMPLETE_SETUP;
 
-	//trace_mmap_printk("pjh: setup_arg_pages() -> mprotect_fixup()");
 	ret = mprotect_fixup(vma, &prev, vma->vm_start, vma->vm_end,
 			vm_flags);
 	if (ret)
@@ -741,7 +740,6 @@ int setup_arg_pages(struct linux_binprm *bprm,
 
 	/* Move stack pages down in memory. */
 	if (stack_shift) {
-		//trace_mmap_printk("pjh: setup_arg_pages() -> shift_arg_pages()");
 		ret = shift_arg_pages(vma, stack_shift);
 		if (ret)
 			goto out_unlock;

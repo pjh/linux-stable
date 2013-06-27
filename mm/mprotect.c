@@ -247,8 +247,8 @@ mprotect_fixup(struct vm_area_struct *vma, struct vm_area_struct **pprev,
 	int dirty_accountable = 0;
 
 	if (newflags == oldflags) {
-		trace_mmap_printk("pjh: mprotect_fixup(): newflags == oldflags, "
-			"returning");
+		//trace_mmap_printk("pjh: mprotect_fixup(): newflags == oldflags, "
+		//	"returning");
 		*pprev = vma;
 		return 0;
 	}

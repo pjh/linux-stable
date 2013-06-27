@@ -812,6 +812,7 @@ again:			remove_next = 1 + (end > next->vm_end);
 	vma->vm_pgoff = pgoff;
 	trace_mmap_vma_resize_remap(current, vma, descr);  //pjh
 	if (adjust_next) {
+		trace_mmap_printk("adjust_next true, resizing next");
 		trace_mmap_vma_resize_unmap(current, next, descr);  //pjh
 		next->vm_start += adjust_next << PAGE_SHIFT;
 		next->vm_pgoff += adjust_next;
@@ -1637,8 +1638,11 @@ out:
 		if (!((vm_flags & VM_SPECIAL) || is_vm_hugetlb_page(vma) ||
 					vma == get_gate_vma(current->mm)))
 			mm->locked_vm += (len >> PAGE_SHIFT);
-		else
+		else {
+			trace_mmap_vma_flags_unmap(current, vma, "mmap_region");
 			vma->vm_flags &= ~VM_LOCKED;
+			trace_mmap_vma_flags_remap(current, vma, "mmap_region");
+		}
 	}
 
 	if (file)

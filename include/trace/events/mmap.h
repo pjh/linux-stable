@@ -21,7 +21,6 @@
  * trace-events-sample.h
  */
 
-#define PJH_FANCY
 #define PJH_BUF_LEN 256
 
 /* DESCRIPTION OF TRACE EVENTS:
@@ -88,24 +87,11 @@ DECLARE_EVENT_CLASS(mmap_vma,
 		__entry->inode = 
 			vma->vm_file ? file_inode(vma->vm_file)->i_ino : 0;
 		if (vma->vm_file) {
-#ifdef PJH_FANCY
-			// Imitate: show_map_vma() calls seq_path() calls d_path()
-			char *p = d_path(&(vma->vm_file->f_path),
+			char *path = d_path(&(vma->vm_file->f_path),
 				(char *)(__entry->filename), PJH_BUF_LEN);
-			while (p > (char *)(__entry->filename)) {
-				/* d_path() may return a pointer that is some distance into
-				 * the filename buffer, with the initial characters as 0
-				 * bytes. So, just replace them with spaces:
-				 *   Weird: looks like d_path() fills in the buffer from
-				 *   right-to-left, for some reason; this makes my output
-				 *   wicked annoying...
-				 */
-				p--;
-				*p = ' ';
-			}
-#else
-			strncpy(__entry->filename, "/some/path/somefile", PJH_BUF_LEN-1);
-#endif
+			strncpy(__entry->filename, path, PJH_BUF_LEN-1);
+			  // I hope the kernel strncpy works with overlapping strings!
+			  //   Seems to work just fine...
 		} else {
 			__entry->filename[0] = '\0';
 		}
@@ -257,7 +243,6 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 		__entry->inode = 
 			vma->vm_file ? file_inode(vma->vm_file)->i_ino : 0;
 		if (vma->vm_file) {
-#ifdef PJH_FANCY
 			// Imitate: show_map_vma() calls seq_path() calls d_path()
 			char *p = d_path(vma->vm_file->f_path,
 				(char *)__entry->filename, PJH_BUF_LEN)
@@ -269,9 +254,6 @@ TRACE_EVENT(mmap_vma,  // creates a function "trace_mmap_vma"
 				p--;
 				*p = ' ';
 			}
-#else
-			strncpy(__entry->filename, "/some/path/somefile", PJH_BUF_LEN-1);
-#endif
 		} else {
 			__entry->filename[0] = '\0';
 		}
@@ -358,7 +340,6 @@ TRACE_EVENT(munmap_vma,  // creates a function "trace_munmap_vma"
 		__entry->inode = 
 			vma->vm_file ? file_inode(vma->vm_file)->i_ino : 0;
 		if (vma->vm_file) {
-#ifdef PJH_FANCY
 			// Imitate: show_map_vma() calls seq_path() calls d_path()
 			char *p = d_path(vma->vm_file->f_path,
 				(char *)__entry->filename, PJH_BUF_LEN)
@@ -370,9 +351,6 @@ TRACE_EVENT(munmap_vma,  // creates a function "trace_munmap_vma"
 				p--;
 				*p = ' ';
 			}
-#else
-			strncpy(__entry->filename, "/some/path/somefile", PJH_BUF_LEN-1);
-#endif
 		} else {
 			__entry->filename[0] = '\0';
 		}
