@@ -2513,6 +2513,55 @@ static int __split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 	 * All of the necessary tracing is now done in vma_adjust; it will capture
 	 * the split+insert case here, as well as other cases that end up at
 	 * the vma_adjust function.
+	 *
+	 * On 2013-06-26 I double-checked the split_vma -> __split_vma -> 
+	 * vma_adjust() code path, and I'm still pretty sure that all of the
+	 * tracing that I've got here makes sense. I'm copying my distilled
+	 * function trace here just because...
+	 * __split_vma:
+	 *	(start, end) = vma to be split at addr, to start
+	 *	if new_below true:
+	 *		new goes from start to addr
+	 *		vma goes from addr to end
+	 *		vma_adjust(): vma=vma, start=addr, end=end, insert=new
+	 *	else:
+	 *		new goes from addr to end
+	 *		vma goes from start to addr
+	 *		vma_adjust(): vma=vma, start=start, end=addr, insert=new
+	 *	[when vma_adjust is called, vm_start and vm_end of new "insert" vma
+	 *	 are already set to exactly what they need to be - only vma passed
+	 *	 as first arg needs to be adjusted.]
+	 * vma_adjust():
+	 *	next = vma->vm_next
+	 *	if insert is non-NULL:
+	 *		[skip first part of this function: importer / exporter stuff,
+	 *		 which sets adjust_next]
+	 *	if file:
+	 *		if insert:
+	 *			__vma_link_file(insert):
+	 *				vma_interval_tree_insert(): whatever, just file stuff
+	 *	if start != vma->vm_start (new_below true):
+	 *		vma->vm_start = start
+	 *		start_changed = true
+	 *	if end != vma->vm_end (new_below false):
+	 *		vma->vm_end = end
+	 *		end_changed = true
+	 *	trace around this for vma - makes sense to me
+	 *	if insert:
+	 *		__insert_vm_struct()
+	 *			__vma_link()
+	 *				__vma_link_list()
+	 *					[Just adjusts vm_prev and vm_next, not vm_start
+	 *					 or vm_end]
+	 *				__vma_link_rb()
+	 *					vma_gap_update()  ...
+	 *					vma_rb_insert()   ...
+	 *			mm->map_count++
+	 *		trace here for insert - makes sense to me
+	 *	validate_mm
+	 *		Only #ifdef CONFIG_DEBUG_VM_RB - try this??
+	 *	return
+	 * done
 	 */
 
 	/* Success. */
