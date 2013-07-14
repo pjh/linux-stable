@@ -409,6 +409,19 @@ TRACE_EVENT(mmap_enable_sim,   //trace_mmap_enable_sim("");
 	TP_printk("%s", __entry->descr)
 );
 
+TRACE_EVENT(mmap_reset_sim,   //trace_mmap_reset_sim("");
+	TP_PROTO(const char *descr),
+	TP_ARGS(descr),
+	TP_STRUCT__entry(
+		__array(char, descr, PJH_BUF_LEN)
+	),
+	TP_fast_assign(
+		strncpy(__entry->descr, descr, PJH_BUF_LEN-1);
+		__entry->descr[PJH_BUF_LEN-1] = '\0';  //defensive
+	),
+	TP_printk("%s", __entry->descr)
+);
+
 TRACE_EVENT(mmap_printk,   //trace_mmap_printk("");
 	TP_PROTO(const char *msg),
 	TP_ARGS(msg),

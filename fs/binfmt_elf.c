@@ -715,6 +715,10 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	}
 
 	/* Flush all traces of the currently running executable */
+	/* PJH: flush_old_exec() eventually leads to the call to exit_mmap
+	 * that removes all of the vmas from the previous program's memory
+	 * map.
+	 */
 	retval = flush_old_exec(bprm);
 	if (retval)
 		goto out_free_dentry;
@@ -732,6 +736,41 @@ static int load_elf_binary(struct linux_binprm *bprm)
 		current->flags |= PF_RANDOMIZE;
 
 	setup_new_exec(bprm);
+
+	/* PJH: when a fork-exec happens, we currently track all of the vmas
+	 * for the new process as they are duplicated during the fork, then
+	 * as they are removed once the exec happens (now). This is normally
+	 * fine or even desirable (we want to know how much kernel overhead
+	 * there is in this procedure), but when tracing the program with
+	 * Pin at the same time, this becomes problematic, because Pin (in
+	 * its default "parent" injection mode) adds two extra forks and an
+	 * extra exec to the overhead. So, the easiest way that I see to
+	 * ignore this overhead is to add a trace event here, when the exec
+	 * is completed, that tells the simulation / analysis scripts to
+	 * reset the tracking and counting for this process and start over
+	 * from the single vma that is now part of the process' memory
+	 * map. When tracing with Pin, this event will be emitted twice from
+	 * the top-level process: once for the actual Pin code (pinbin), then
+	 * again when the code for the actual program being traced /
+	 * instrumented is exec'd (this happens in the top-level process -
+	 * the two forked child processes are used to actually execute the
+	 * pinbin code...).
+	 *
+	 * Currently, the trace events emitted by a just-exec'd process
+	 * are:
+	 *   __bprm_mm_init: mmap_vma_alloc
+	 *   expand_downwards: mmap_vma_resize_unmap / remap
+	 *   exit_mmap -> remove_vma: mmap_vma_free, repeatedly
+	 *   setup_arg_pages -> mprotect_fixup: ...
+	 * setup_arg_pages() comes below. After resetting the simulation
+	 * with the trace event here, we'd like to "reconstruct" the alloc,
+	 * unmap, and remap of the lone vma that is now part of the process'
+	 * memory map. We do that with the trace events below:
+	 */
+	trace_mmap_reset_sim("load_elf_binary for execve");
+	trace_mmap_vma_alloc(current, bprm->vma, "load_elf_binary");
+	trace_mmap_vma_resize_unmap(current, bprm->vma, "load_elf_binary");
+	trace_mmap_vma_resize_remap(current, bprm->vma, "load_elf_binary");
 
 	/* Do this so that we can load the interpreter, if need be.  We will
 	   change some of these later */
