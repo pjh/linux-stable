@@ -124,32 +124,38 @@ TRACE_EVENT(sched_switch,
 	TP_STRUCT__entry(
 		__array(	char,	prev_comm,	TASK_COMM_LEN	)
 		__field(	pid_t,	prev_pid			)
+		__field(	pid_t,	prev_tgid			)
 		__field(	int,	prev_prio			)
 		__field(	long,	prev_state			)
 		__array(	char,	next_comm,	TASK_COMM_LEN	)
 		__field(	pid_t,	next_pid			)
+		__field(	pid_t,	next_tgid			)
 		__field(	int,	next_prio			)
 	),
 
 	TP_fast_assign(
 		memcpy(__entry->next_comm, next->comm, TASK_COMM_LEN);
 		__entry->prev_pid	= prev->pid;
+		__entry->prev_tgid	= prev->tgid;
 		__entry->prev_prio	= prev->prio;
 		__entry->prev_state	= __trace_sched_switch_state(prev);
 		memcpy(__entry->prev_comm, prev->comm, TASK_COMM_LEN);
 		__entry->next_pid	= next->pid;
+		__entry->next_tgid	= next->tgid;
 		__entry->next_prio	= next->prio;
 	),
 
-	TP_printk("prev_comm=%s prev_pid=%d prev_prio=%d prev_state=%s%s ==> next_comm=%s next_pid=%d next_prio=%d",
-		__entry->prev_comm, __entry->prev_pid, __entry->prev_prio,
+	TP_printk("prev_comm=%s prev_pid=%d prev_tgid=%d prev_prio=%d prev_state=%s%s ==> next_comm=%s next_pid=%d next_tgid=%d next_prio=%d",
+		__entry->prev_comm, __entry->prev_pid, __entry->prev_tgid,
+		__entry->prev_prio,
 		__entry->prev_state & (TASK_STATE_MAX-1) ?
 		  __print_flags(__entry->prev_state & (TASK_STATE_MAX-1), "|",
 				{ 1, "S"} , { 2, "D" }, { 4, "T" }, { 8, "t" },
 				{ 16, "Z" }, { 32, "X" }, { 64, "x" },
 				{ 128, "K" }, { 256, "W" }, { 512, "P" }) : "R",
 		__entry->prev_state & TASK_STATE_MAX ? "+" : "",
-		__entry->next_comm, __entry->next_pid, __entry->next_prio)
+		__entry->next_comm, __entry->next_pid, __entry->next_tgid,
+		__entry->next_prio)
 );
 
 /*
