@@ -164,7 +164,9 @@ FTRACE_ENTRY_DUP(wakeup, ctx_switch_entry,
  * Stack-trace entry:
  */
 
-#define FTRACE_STACK_ENTRIES	8
+//#define FTRACE_STACK_ENTRIES	8
+//#define FTRACE_STACK_ENTRIES	64      //PJH: 64 entries = 512 bytes
+#define FTRACE_STACK_ENTRIES	96      //PJH: 96 entries = 768 bytes
 
 #ifndef CONFIG_64BIT
 # define IP_FMT "%08lx"

@@ -13,7 +13,7 @@ extern int
 seq_print_ip_sym(struct trace_seq *s, unsigned long ip,
 		unsigned long sym_flags);
 extern int seq_print_userip_objs(const struct userstack_entry *entry,
-				 struct trace_seq *s, unsigned long sym_flags);
+				 struct trace_seq *s, unsigned long sym_flags, int cpu);
 extern int seq_print_user_ip(struct trace_seq *s, struct mm_struct *mm,
 			     unsigned long ip, unsigned long sym_flags);
 

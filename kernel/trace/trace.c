@@ -1465,6 +1465,10 @@ ftrace_trace_userstack(struct ring_buffer *buffer, unsigned long flags, int pc)
 	if (!(trace_flags & TRACE_ITER_USERSTACKTRACE))
 		return;
 
+//	//PJH: seen in dmesg
+//	//printk(KERN_WARNING "PJH: ftrace_trace_userstack: entered, past "
+//	//	"TRACE_ITER_USERSTACKTRACE flag check\n");
+
 	/*
 	 * NMIs can not handle page faults, even with fix ups.
 	 * The save user stack can (and often does) fault.
@@ -1472,20 +1476,33 @@ ftrace_trace_userstack(struct ring_buffer *buffer, unsigned long flags, int pc)
 	if (unlikely(in_nmi()))
 		return;
 
+//	//PJH: seen in dmesg
+//	//printk(KERN_WARNING "PJH: ftrace_trace_userstack: past in_nmi()\n");
+
 	/*
 	 * prevent recursion, since the user stack tracing may
 	 * trigger other kernel events.
 	 */
 	preempt_disable();
-	if (__this_cpu_read(user_stack_count))
+	if (__this_cpu_read(user_stack_count)) {
+//		//PJH: not seen yet...
+//		printk(KERN_WARNING "PJH: ftrace_trace_userstack: __this_cpu_read() "
+//			"is true, I think this means the user stack tracing "
+//			"triggered some other event :(\n");
 		goto out;
+	}
 
 	__this_cpu_inc(user_stack_count);
 
 	event = trace_buffer_lock_reserve(buffer, TRACE_USER_STACK,
 					  sizeof(*entry), flags, pc);
-	if (!event)
+	if (!event) {
+//		//PJH: not seen yet...
+//		printk(KERN_WARNING "PJH: ftrace_trace_userstack: !event true "
+//			"means trace_buffer_lock_reserve() -> ring_buffer_lock_reserve() "
+//			"failed, goto out_drop_count\n");
 		goto out_drop_count;
+	}
 	entry	= ring_buffer_event_data(event);
 
 	entry->tgid		= current->tgid;
@@ -1497,8 +1514,13 @@ ftrace_trace_userstack(struct ring_buffer *buffer, unsigned long flags, int pc)
 	trace.entries		= entry->caller;
 
 	save_stack_trace_user(&trace);
-	if (!filter_check_discard(call, entry, buffer, event))
+	if (!filter_check_discard(call, entry, buffer, event)) {
+//		//PJH: seen in dmesg output
+//		//printk(KERN_WARNING "PJH: ftrace_trace_userstack: "
+//		//	"!filter_check_discard() true, calling __buffer_unlock_"
+//		//	"commit()\n");
 		__buffer_unlock_commit(buffer, event);
+	}
 
  out_drop_count:
 	__this_cpu_dec(user_stack_count);

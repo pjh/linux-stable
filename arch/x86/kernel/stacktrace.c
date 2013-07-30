@@ -109,7 +109,9 @@ static inline void __save_stack_trace_user(struct stack_trace *trace)
 {
 	const struct pt_regs *regs = task_pt_regs(current);
 	const void __user *fp = (const void __user *)regs->bp;
+//	int i = 0;
 
+//	printk(KERN_WARNING "PJH: __save_stack_trace_user: entered\n");
 	if (trace->nr_entries < trace->max_entries)
 		trace->entries[trace->nr_entries++] = regs->ip;
 
@@ -118,18 +120,32 @@ static inline void __save_stack_trace_user(struct stack_trace *trace)
 
 		frame.next_fp = NULL;
 		frame.ret_addr = 0;
-		if (!copy_stack_frame(fp, &frame))
+		if (!copy_stack_frame(fp, &frame)) {
+//			printk(KERN_WARNING "PJH: __save_stack_trace_user: "
+//				"!copy_stack_frame() true, break: loop %d\n", i);
 			break;
-		if ((unsigned long)fp < regs->sp)
+		}
+		if ((unsigned long)fp < regs->sp) {
+//			printk(KERN_WARNING "PJH: __save_stack_trace_user: "
+//				"fp < regs->sp true, break: loop %d\n", i);
 			break;
+		}
 		if (frame.ret_addr) {
 			trace->entries[trace->nr_entries++] =
 				frame.ret_addr;
 		}
-		if (fp == frame.next_fp)
+		if (fp == frame.next_fp) {
+//			printk(KERN_WARNING "PJH: __save_stack_trace_user: "
+//				"fp == frame.next_fp true, break: loop %d\n", i);
 			break;
+		}
 		fp = frame.next_fp;
+//		i++;
 	}
+//	if (trace->nr_entries >= trace->max_entries) {
+//		printk(KERN_WARNING "PJH: __save_stack_trace_user: "
+//			"exited loop normally after loop %d\n", i);
+//	}
 }
 
 void save_stack_trace_user(struct stack_trace *trace)

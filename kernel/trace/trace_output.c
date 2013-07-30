@@ -462,16 +462,20 @@ int seq_print_user_ip(struct trace_seq *s, struct mm_struct *mm,
 	if (s->full)
 		return 0;
 
+//	printk(KERN_WARNING "PJH: seq_print_user_ip: entered\n");
 	if (mm) {
 		const struct vm_area_struct *vma;
+		printk(KERN_WARNING "PJH: seq_print_user_ip: mm non-NULL\n");
 
 		down_read(&mm->mmap_sem);
 		vma = find_vma(mm, ip);
 		if (vma) {
+//			printk(KERN_WARNING "PJH: seq_print_user_ip: vma found\n");
 			file = vma->vm_file;
 			vmstart = vma->vm_start;
 		}
 		if (file) {
+//			printk(KERN_WARNING "PJH: seq_print_user_ip: file found\n");
 			ret = trace_seq_path(s, &file->f_path);
 			if (ret)
 				ret = trace_seq_printf(s, "[+0x%lx]",
@@ -486,13 +490,25 @@ int seq_print_user_ip(struct trace_seq *s, struct mm_struct *mm,
 
 int
 seq_print_userip_objs(const struct userstack_entry *entry, struct trace_seq *s,
-		      unsigned long sym_flags)
+		      unsigned long sym_flags, int cpu)
 {
 	struct mm_struct *mm = NULL;
 	int ret = 1;
 	unsigned int i;
 
+//	printk(KERN_WARNING "PJH: seq_print_userip_objs: entered\n");
+
+	// According to the definition of TRACE_ITER_SYM_USEROBJ in
+	// kernel/trace/trace.h and the corresponding trace_options in
+	// kernel/trace/trace.c, the option that corresponds to this flag is
+	// /sys/kernel/debug/tracing/options/sym-userobj
+	printk(KERN_WARNING "PJH: seq_print_userip_objs: TRACE_ITER_SYM_USEROBJ "
+			"flag == %lu\n", trace_flags & TRACE_ITER_SYM_USEROBJ);
+
+//#define PJH_ALWAYS_TRACE_SYM
+#ifndef PJH_ALWAYS_TRACE_SYM 
 	if (trace_flags & TRACE_ITER_SYM_USEROBJ) {
+#endif
 		struct task_struct *task;
 		/*
 		 * we do the lookup on the thread group leader,
@@ -503,7 +519,9 @@ seq_print_userip_objs(const struct userstack_entry *entry, struct trace_seq *s,
 		if (task)
 			mm = get_task_mm(task);
 		rcu_read_unlock();
+#ifndef PJH_ALWAYS_TRACE_SYM 
 	}
+#endif
 
 	for (i = 0; i < FTRACE_STACK_ENTRIES; i++) {
 		unsigned long ip = entry->caller[i];
@@ -511,10 +529,11 @@ seq_print_userip_objs(const struct userstack_entry *entry, struct trace_seq *s,
 		if (ip == ULONG_MAX || !ret)
 			break;
 		if (ret)
-			ret = trace_seq_puts(s, " => ");
+			ret = trace_seq_printf(s, " [%03d] => ", cpu);  //PJH
+			//ret = trace_seq_puts(s, " => ");   //orig
 		if (!ip) {
 			if (ret)
-				ret = trace_seq_puts(s, "??");
+				ret = trace_seq_puts(s, "??");  //PJH: output "??" if ip == 0
 			if (ret)
 				ret = trace_seq_puts(s, "\n");
 			continue;
@@ -1194,13 +1213,24 @@ static enum print_line_t trace_user_stack_print(struct trace_iterator *iter,
 	struct userstack_entry *field;
 	struct trace_seq *s = &iter->seq;
 
+//	printk(KERN_WARNING "PJH: trace_user_stack_print: entered\n");
+
 	trace_assign_type(field, iter->ent);
 
-	if (!trace_seq_puts(s, "<user stack trace>\n"))
+	if (!trace_seq_puts(s, "<user stack trace>\n")) {
+//		printk(KERN_WARNING "PJH: trace_user_stack_print: "
+//			"trace_seq_puts() returned non-zero, goto partial\n");
 		goto partial;
+	}
 
-	if (!seq_print_userip_objs(field, s, flags))
+	if (!seq_print_userip_objs(field, s, flags, iter->cpu)) {
+//		printk(KERN_WARNING "PJH: trace_user_stack_print: "
+//			"seq_print_userip_objs() returned non-zero, goto partial\n");
 		goto partial;
+	}
+
+//	printk(KERN_WARNING "PJH: trace_user_stack_print: returning "
+//		"TRACE_TYPE_HANDLED\n");
 
 	return TRACE_TYPE_HANDLED;
 
