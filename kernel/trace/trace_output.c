@@ -465,7 +465,7 @@ int seq_print_user_ip(struct trace_seq *s, struct mm_struct *mm,
 //	printk(KERN_WARNING "PJH: seq_print_user_ip: entered\n");
 	if (mm) {
 		const struct vm_area_struct *vma;
-		printk(KERN_WARNING "PJH: seq_print_user_ip: mm non-NULL\n");
+//		printk(KERN_WARNING "PJH: seq_print_user_ip: mm non-NULL\n");
 
 		down_read(&mm->mmap_sem);
 		vma = find_vma(mm, ip);
@@ -498,12 +498,16 @@ seq_print_userip_objs(const struct userstack_entry *entry, struct trace_seq *s,
 
 //	printk(KERN_WARNING "PJH: seq_print_userip_objs: entered\n");
 
-	// According to the definition of TRACE_ITER_SYM_USEROBJ in
-	// kernel/trace/trace.h and the corresponding trace_options in
-	// kernel/trace/trace.c, the option that corresponds to this flag is
-	// /sys/kernel/debug/tracing/options/sym-userobj
-	printk(KERN_WARNING "PJH: seq_print_userip_objs: TRACE_ITER_SYM_USEROBJ "
-			"flag == %lu\n", trace_flags & TRACE_ITER_SYM_USEROBJ);
+	/*
+	 * According to the definition of TRACE_ITER_SYM_USEROBJ in
+	 * kernel/trace/trace.h and the corresponding trace_options in
+	 * kernel/trace/trace.c, the option that corresponds to this flag is
+	 * /sys/kernel/debug/tracing/options/sym-userobj - I tested it and this
+	 * flag actually does work! (when not used in combination with any of
+	 * the other non-default options/, except for userstacktrace of course).
+	 */
+//	printk(KERN_WARNING "PJH: seq_print_userip_objs: TRACE_ITER_SYM_USEROBJ "
+//			"flag == %lu\n", trace_flags & TRACE_ITER_SYM_USEROBJ);
 
 //#define PJH_ALWAYS_TRACE_SYM
 #ifndef PJH_ALWAYS_TRACE_SYM 
