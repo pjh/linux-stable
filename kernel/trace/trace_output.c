@@ -457,34 +457,42 @@ int seq_print_user_ip(struct trace_seq *s, struct mm_struct *mm,
 {
 	struct file *file = NULL;
 	unsigned long vmstart = 0;
+	unsigned long offset = 0;
 	int ret = 1;
 
 	if (s->full)
 		return 0;
 
-//	printk(KERN_WARNING "PJH: seq_print_user_ip: entered\n");
-	if (mm) {
+	ret = trace_seq_printf(s, " <" IP_FMT "> ", ip);
+	if (mm && ret) {
+		/* PJH: when TRACE_ITER_SYM_USEROBJ (sym-userobj) is enabled, mm
+		 * will be set and this code block will be entered. I modified
+		 * the code in this function to always print the "standard" ip
+		 * (just above), and to always print the vma+offset if the vma
+		 * could be found in the task's mmap.
+		 */
 		const struct vm_area_struct *vma;
-//		printk(KERN_WARNING "PJH: seq_print_user_ip: mm non-NULL\n");
 
 		down_read(&mm->mmap_sem);
 		vma = find_vma(mm, ip);
 		if (vma) {
-//			printk(KERN_WARNING "PJH: seq_print_user_ip: vma found\n");
 			file = vma->vm_file;
 			vmstart = vma->vm_start;
-		}
-		if (file) {
-//			printk(KERN_WARNING "PJH: seq_print_user_ip: file found\n");
-			ret = trace_seq_path(s, &file->f_path);
+			offset = ip - vmstart;
+			if (file) {
+				ret = trace_seq_path(s, &file->f_path);
+			} else {
+				ret = trace_seq_printf(s, "anon-vma <" IP_FMT ">", vmstart);
+			}
 			if (ret)
-				ret = trace_seq_printf(s, "[+0x%lx]",
-						       ip - vmstart);
+				ret = trace_seq_printf(s, "[+0x%lx]", offset);
+		} else {
+			ret = trace_seq_printf(s, "vma-not-found");  //ip already printed
 		}
 		up_read(&mm->mmap_sem);
 	}
-	if (ret && ((sym_flags & TRACE_ITER_SYM_ADDR) || !file))
-		ret = trace_seq_printf(s, " <" IP_FMT ">", ip);
+//	if (ret && ((sym_flags & TRACE_ITER_SYM_ADDR) || !file))
+//		ret = trace_seq_printf(s, " <" IP_FMT ">", ip);
 	return ret;
 }
 
