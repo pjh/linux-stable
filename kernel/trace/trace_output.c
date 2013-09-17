@@ -530,6 +530,11 @@ seq_print_userip_objs(const struct userstack_entry *entry, struct trace_seq *s,
 		task = find_task_by_vpid(entry->tgid);
 		if (task)
 			mm = get_task_mm(task);
+		else
+			printk(KERN_WARNING "PJH: sym-userobj option enabled, but "
+					"could not find task and mm for trace entry's tgid %u; "
+					"means that process has already terminated, I think\n",
+					entry->tgid);
 		rcu_read_unlock();
 #ifndef PJH_ALWAYS_TRACE_SYM 
 	}
