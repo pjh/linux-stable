@@ -83,35 +83,66 @@ EXPORT_SYMBOL_GPL(save_stack_trace_tsk);
 
 /* Userspace stacktrace - based on kernel/trace/trace_sysprof.c */
 
+/* PJH: on an x86 stack frame, the caller saves the return address at
+ * the top of its stack frame, and then the first thing that the
+ * callee does is save the ebp (frame pointer register) at the bottom
+ * of its stack frame. So, when copying directly from memory we go
+ * from low addresses to high: the saved ebp (next_fp) comes first,
+ * followed by ret_addr.
+ */
 struct stack_frame_user {
 	const void __user	*next_fp;
 	unsigned long		ret_addr;
 };
 
+/* PJH: Returns:
+ *   -1 if fp is not a valid user space pointer.
+ *   -2 if __copy_from_user_inatomic() failed (seems unlikely? I'm not
+ *      sure yet why it would fail).
+ *    0 on success.
+ */
 static int
 copy_stack_frame(const void __user *fp, struct stack_frame_user *frame)
 {
 	int ret;
 
 	if (!access_ok(VERIFY_READ, fp, sizeof(*frame)))
-		return 0;
+		return -1;
 
-	ret = 1;
+	ret = 0;
 	pagefault_disable();
 	if (__copy_from_user_inatomic(frame, fp, sizeof(*frame)))
-		ret = 0;
+		ret = -2;
 	pagefault_enable();
 
 	return ret;
 }
 
-static inline void __save_stack_trace_user(struct stack_trace *trace)
+/* PJH: returns a code describing why the userstacktrace unwind stopped or
+ * failed:
+ *   'c': copy from stack memory into kernel data structure failed; seems
+ *        unlikely?
+ *   'e': we read a frame pointer from the stack that's equivalent to
+ *        the current function's frame pointer - not sure what this means
+ *        yet...
+ *   'k': this is a kernel thread.
+ *   'l': we read an invalid frame pointer from the stack; not sure if this
+ *        is ever expected, or if it just means that we can't tell what's
+ *        going on in the current stack (e.g. because it doesn't even
+ *        store frame pointers at all).
+ *   'n': reached max number of entries
+ *   'p': tried to follow a frame pointer that is not a valid user space
+ *        address. Means that stack frames aren't correctly storing
+ *        frame pointers?
+ *   'z': default max_entries is 0 - never expect this.
+ */
+static inline char __save_stack_trace_user(struct stack_trace *trace)
 {
 	const struct pt_regs *regs = task_pt_regs(current);
 	const void __user *fp = (const void __user *)regs->bp;
-//	int i = 0;
+	char reason = 'z';
+	int ret;
 
-//	printk(KERN_WARNING "PJH: __save_stack_trace_user: entered\n");
 	if (trace->nr_entries < trace->max_entries)
 		trace->entries[trace->nr_entries++] = regs->ip;
 
@@ -120,14 +151,19 @@ static inline void __save_stack_trace_user(struct stack_trace *trace)
 
 		frame.next_fp = NULL;
 		frame.ret_addr = 0;
-		if (!copy_stack_frame(fp, &frame)) {
-//			printk(KERN_WARNING "PJH: __save_stack_trace_user: "
-//				"!copy_stack_frame() true, break: loop %d\n", i);
+		ret = copy_stack_frame(fp, &frame);
+		if (ret) {
+			if (ret == -1)
+				reason = 'p';
+			else
+				reason = 'c';
 			break;
 		}
 		if ((unsigned long)fp < regs->sp) {
-//			printk(KERN_WARNING "PJH: __save_stack_trace_user: "
-//				"fp < regs->sp true, break: loop %d\n", i);
+			/* Why doesn't this check happen BEFORE calling copy_stack_frame()?
+			 * The check isn't affected by that call...
+			 */
+			reason = 'l';
 			break;
 		}
 		if (frame.ret_addr) {
@@ -135,28 +171,32 @@ static inline void __save_stack_trace_user(struct stack_trace *trace)
 				frame.ret_addr;
 		}
 		if (fp == frame.next_fp) {
-//			printk(KERN_WARNING "PJH: __save_stack_trace_user: "
-//				"fp == frame.next_fp true, break: loop %d\n", i);
+			reason = 'e';
 			break;
 		}
 		fp = frame.next_fp;
-//		i++;
+		reason = 'n';
 	}
-//	if (trace->nr_entries >= trace->max_entries) {
-//		printk(KERN_WARNING "PJH: __save_stack_trace_user: "
-//			"exited loop normally after loop %d\n", i);
-//	}
+
+	return reason;
 }
 
-void save_stack_trace_user(struct stack_trace *trace)
+/* PJH: returns a code describing why the userstacktrace unwind stopped or
+ * failed: see __save_stack_trace_user().
+ */
+char save_stack_trace_user(struct stack_trace *trace)
 {
+	char reason = 'k';
+
 	/*
 	 * Trace user stack if we are not a kernel thread
 	 */
 	if (current->mm) {
-		__save_stack_trace_user(trace);
+		reason = __save_stack_trace_user(trace);
 	}
 	if (trace->nr_entries < trace->max_entries)
 		trace->entries[trace->nr_entries++] = ULONG_MAX;
+
+	return reason;
 }
 

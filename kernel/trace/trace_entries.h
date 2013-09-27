@@ -200,6 +200,7 @@ FTRACE_ENTRY(user_stack, userstack_entry,
 	F_STRUCT(
 		__field(	unsigned int,	tgid	)
 		__array(	unsigned long,	caller, FTRACE_STACK_ENTRIES	)
+		__field(	char,	reason	)
 	),
 
 	F_printk("\t=> (" IP_FMT ")\n\t=> (" IP_FMT ")\n\t=> (" IP_FMT ")\n"

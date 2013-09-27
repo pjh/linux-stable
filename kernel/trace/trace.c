@@ -1513,7 +1513,10 @@ ftrace_trace_userstack(struct ring_buffer *buffer, unsigned long flags, int pc)
 	trace.skip		= 0;
 	trace.entries		= entry->caller;
 
-	save_stack_trace_user(&trace);
+	/* PJH: added "reason" field to struct userstack_entry so that trace
+	 * output can tell me why the userstacktrace unwind stopped/failed.
+	 */
+	entry->reason = save_stack_trace_user(&trace);
 	if (!filter_check_discard(call, entry, buffer, event)) {
 //		//PJH: seen in dmesg output
 //		//printk(KERN_WARNING "PJH: ftrace_trace_userstack: "

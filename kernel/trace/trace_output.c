@@ -543,8 +543,22 @@ seq_print_userip_objs(const struct userstack_entry *entry, struct trace_seq *s,
 	for (i = 0; i < FTRACE_STACK_ENTRIES; i++) {
 		unsigned long ip = entry->caller[i];
 
-		if (ip == ULONG_MAX || !ret)
+		if (!ret)
 			break;
+		if (ip == ULONG_MAX) {
+			/* PJH: ULONG_MAX marks the end of the saved userstack entries;
+			 * now print out the reason that the stack unwind stopped.
+			 */
+			ret = trace_seq_printf(s, " [%03d] reason %c", cpu,
+					entry->reason);
+			if (ret) {
+				/* Is it really necessary to separate the newline from the
+				 * printf?
+				 */
+				ret = trace_seq_puts(s, "\n");
+			}
+			break;
+		}
 		if (ret)
 			ret = trace_seq_printf(s, " [%03d] => ", cpu);  //PJH
 			//ret = trace_seq_puts(s, " => ");   //orig
