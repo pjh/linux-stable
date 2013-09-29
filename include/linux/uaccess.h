@@ -12,6 +12,11 @@
  * and in fact they are identical; this is because currently there is
  * no other way to make the pagefault handlers do this. So we do
  * disable preemption but we don't necessarily care about that.
+ *	#define preempt_disable() \
+ *	do { \
+ *		inc_preempt_count(); \
+ *		barrier(); \
+ *	} while (0)
  */
 static inline void pagefault_disable(void)
 {

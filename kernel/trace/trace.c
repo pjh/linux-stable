@@ -1476,19 +1476,19 @@ ftrace_trace_userstack(struct ring_buffer *buffer, unsigned long flags, int pc)
 	if (unlikely(in_nmi()))
 		return;
 
-//	//PJH: seen in dmesg
-//	//printk(KERN_WARNING "PJH: ftrace_trace_userstack: past in_nmi()\n");
-
 	/*
 	 * prevent recursion, since the user stack tracing may
 	 * trigger other kernel events.
 	 */
+//#define PJH_UNSAFE_STACK_UNWIND_BAD_IDEA
+#ifndef PJH_UNSAFE_STACK_UNWIND_BAD_IDEA
 	preempt_disable();
+#endif
 	if (__this_cpu_read(user_stack_count)) {
-//		//PJH: not seen yet...
-//		printk(KERN_WARNING "PJH: ftrace_trace_userstack: __this_cpu_read() "
-//			"is true, I think this means the user stack tracing "
-//			"triggered some other event :(\n");
+		//PJH: not seen yet...
+		printk(KERN_WARNING "PJH: ftrace_trace_userstack: __this_cpu_read() "
+			"is true, I think this means the user stack tracing "
+			"triggered some other event :(\n");
 		goto out;
 	}
 
@@ -1528,7 +1528,10 @@ ftrace_trace_userstack(struct ring_buffer *buffer, unsigned long flags, int pc)
  out_drop_count:
 	__this_cpu_dec(user_stack_count);
  out:
+#ifndef PJH_UNSAFE_STACK_UNWIND_BAD_IDEA
 	preempt_enable();
+#endif
+	return;
 }
 
 #ifdef UNUSED
