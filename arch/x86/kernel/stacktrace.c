@@ -271,6 +271,8 @@ static inline char __save_stack_trace_user(struct stack_trace *trace)
 				reason = 'c';
 			break;
 		}
+#define PJH_SKIP_DUMBASS_CHECK
+#ifndef PJH_SKIP_DUMBASS_CHECK
 		if ((unsigned long)fp < regs->sp) {
 			/* Why doesn't this check happen BEFORE calling copy_stack_frame()?
 			 * The check isn't affected by that call...
@@ -307,10 +309,20 @@ static inline char __save_stack_trace_user(struct stack_trace *trace)
 			 * Is it possible to force gcc to NEVER spill rbp to
 			 * memory, and always keep the frame pointer in this
 			 * register at all times??
+			 *
+			 * Also note that in the kernel, it appears that "unsigned long"
+			 * and "void *" will always have the same size; the kernel ABI
+			 * "defines" this, for all architectures.
+			 *   http://osdir.com/ml/linux.kernel.mm/2004-12/msg00042.html
+			 *   "A lot of code in the kernel uses an "unsigned long"
+			 *    instead of a "void*" to hold a generic memory address.
+			 *    I personally like this practice, if you never intend to
+			 *    directly dereference the pointer."
 			 */
 			reason = 'l';
 			break;
 		}
+#endif
 		if (frame.ret_addr) {
 			trace->entries[trace->nr_entries++] =
 				frame.ret_addr;
