@@ -52,6 +52,7 @@ DECLARE_EVENT_CLASS(mmap_vma,
 	TP_STRUCT__entry(
 		__field(pid_t, pid)
 		__field(pid_t, tgid)
+		__field(pid_t, ptgid)
 		__array(char, label, PJH_BUF_LEN)
 		__field(struct vm_area_struct *, vma)
 		__field(unsigned long, vm_start)
@@ -66,6 +67,11 @@ DECLARE_EVENT_CLASS(mmap_vma,
 	TP_fast_assign(
 		__entry->pid = cur_task->pid;
 		__entry->tgid = cur_task->tgid;
+		/* Grab parent's tgid: this extra pointer dereference is kind of
+		 * a bummer, but hopefully not much performance impact.
+		 */
+		__entry->ptgid = cur_task->real_parent ?
+		                 cur_task->real_parent->tgid : 0;
 		strncpy(__entry->label, label, PJH_BUF_LEN-1);
 		__entry->label[PJH_BUF_LEN-1] = '\0';  //defensive
 		__entry->vma = vma;
@@ -104,9 +110,10 @@ DECLARE_EVENT_CLASS(mmap_vma,
 	 * Imitate printing of a vma entry in fs/proc/task_mmu.c:show_map_vma().
 	 *   00400000-0040c000 r-xp 00000000 fd:01 41038  /bin/cat
 	 */
-	TP_printk("pid=%d tgid=%d [%s]: %p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
+	TP_printk("pid=%d tgid=%d ptgid=%d [%s]: %p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
 		__entry->pid,
 		__entry->tgid,
+		__entry->ptgid,
 		__entry->label,
 		__entry->vma,
 		__entry->vm_start,

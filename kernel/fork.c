@@ -1381,7 +1381,54 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * Clear TID on mm_release()?
 	 */
 	p->clear_child_tid = (clone_flags & CLONE_CHILD_CLEARTID) ? child_tidptr : NULL;
+
+	/* Update: we need the real_parent field to be set by this point
+	 * as well, because we may print out the parent's tgid in our trace
+	 * messages. Looking through the code between this point and the
+	 * original CLONE_PARENT code location, I don't see any other
+	 * modifications of clone_flags, current->real_parent, or
+	 * current->parent_exec_id, so I think it should be safe to move
+	 * this code up here.
+	 * Oh, according to the original code, we "Need tasklist lock for
+	 * parent etc handling!" - so, add an extra lock / unlock around
+	 * this code?!
+	 *   This is adding non-trace overhead to the kernel code!
+	 *   Ideally we'd like to avoid this, but hopefully not much impact...
+	 * Actually, I don't like this idea - if we lock here, set some
+	 * stuff, then unlock, then re-lock later and set some more stuff,
+	 * it seems like something (e.g. part of "current") could change
+	 * while unlocked, and the things will be set based on different
+	 * stuff. Another idea, with less fidelity potentially, but without
+	 * possible race condition when setting p's fields: set these fields
+	 * once here while not locked, then set them again "normally" below
+	 * while locked. This means that our trace events in copy_mm ->
+	 * dup_mm -> dup_mmap will likely (but not guaranteedly) have the
+	 * right real_parent pointer; in the unlikely event that they do
+	 * not, then maybe our analysis will fail and we'll just have to
+	 * re-acquire the trace.
+	 *   Again, this approach is adding non-trace overhead to the kernel's
+	 *   operation, but it's just an extra comparison and two extra
+	 *   assignments on the fork path, which I'm not too concerned about;
+	 *   I'm definitely less concerned about it than the potential impact
+	 *   of taking the lock twice!
+	 * If this doesn't work, I can just take it out and then enable and
+	 * analyze the default trace events for forks instead (maybe this
+	 * is the smarter solution...)
+	 */
+	//write_lock_irq(&tasklist_lock);   // bad idea?!
+	
+	/* CLONE_PARENT re-uses the old parent */
+	if (clone_flags & (CLONE_PARENT|CLONE_THREAD)) {
+		p->real_parent = current->real_parent;
+		p->parent_exec_id = current->parent_exec_id;
+	} else {
+		p->real_parent = current;
+		p->parent_exec_id = current->self_exec_id;
+	}
+	
+	//write_unlock_irq(&tasklist_lock);   // bad idea?!
 #endif
+
 	retval = copy_mm(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_signal;
@@ -1414,6 +1461,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 */
 	p->clear_child_tid = (clone_flags & CLONE_CHILD_CLEARTID) ? child_tidptr : NULL;
 #endif
+
 #ifdef CONFIG_BLOCK
 	p->plug = NULL;
 #endif
