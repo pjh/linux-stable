@@ -12,10 +12,6 @@
 #define _TRACE_MMAP_H
 
 #include <linux/tracepoint.h>
-//#include <linux/types.h>
-  // needed?
-//#include <trace/events/gfpflags.h>
-  // needed?
 
 /* For information about how to fill in a TRACE_EVENT, see
  * trace-events-sample.h

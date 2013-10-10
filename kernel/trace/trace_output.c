@@ -532,7 +532,7 @@ seq_print_userip_objs(const struct userstack_entry *entry, struct trace_seq *s,
 			mm = get_task_mm(task);
 		else
 			printk(KERN_WARNING "PJH: sym-userobj option enabled, but "
-					"could not find task and mm for trace entry's tgid %u; "
+					"could not find task and mm for trace entry's tgid %d; "
 					"means that process has already terminated, I think\n",
 					entry->tgid);
 		rcu_read_unlock();
@@ -1248,7 +1248,7 @@ static enum print_line_t trace_user_stack_print(struct trace_iterator *iter,
 
 	trace_assign_type(field, iter->ent);
 
-	if (!trace_seq_puts(s, "<user stack trace>\n")) {
+	if (!trace_seq_printf(s, "<user stack trace> tgid=%d\n", field->tgid)) {
 //		printk(KERN_WARNING "PJH: trace_user_stack_print: "
 //			"trace_seq_puts() returned non-zero, goto partial\n");
 		goto partial;

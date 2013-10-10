@@ -198,7 +198,7 @@ FTRACE_ENTRY(user_stack, userstack_entry,
 	TRACE_USER_STACK,
 
 	F_STRUCT(
-		__field(	unsigned int,	tgid	)
+		__field(	pid_t,	tgid	)
 		__array(	unsigned long,	caller, FTRACE_STACK_ENTRIES	)
 		__field(	char,	reason	)
 	),
