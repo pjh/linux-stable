@@ -768,7 +768,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	 * unmap, and remap of the lone vma that is now part of the process'
 	 * memory map. We do that with the trace events below:
 	 */
-	trace_mmap_reset_sim("load_elf_binary for execve");
+	trace_mmap_reset_sim(current, "load_elf_binary for execve");
 	trace_mmap_vma_alloc(current, bprm->vma, "load_elf_binary");
 	trace_mmap_vma_resize_unmap(current, bprm->vma, "load_elf_binary");
 	trace_mmap_vma_resize_remap(current, bprm->vma, "load_elf_binary");

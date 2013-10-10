@@ -613,7 +613,7 @@ static int shift_arg_pages(struct vm_area_struct *vma, unsigned long shift)
 	 * function once they are adjusted by "shift" bytes.
 	 */
 	trace_mmap_vma_reloc_unmap(current, vma, "shift_arg_pages");  //pjh
-	trace_mmap_disable_sim("shift_arg_pages");
+	trace_mmap_disable_sim(current, "shift_arg_pages");
 
 	/*
 	 * cover the whole range: [new_start, old_end)
@@ -659,7 +659,7 @@ static int shift_arg_pages(struct vm_area_struct *vma, unsigned long shift)
 	/* PJH: ok, now re-enable my simulation code, and re-map the vma
 	 * that was relocated by the two vma_adjust() calls.
 	 */
-	trace_mmap_enable_sim("shift_arg_pages");
+	trace_mmap_enable_sim(current, "shift_arg_pages");
 	trace_mmap_vma_reloc_remap(current, vma, "shift_arg_pages");  //pjh
 
 	return 0;
