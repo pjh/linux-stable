@@ -812,7 +812,10 @@ again:			remove_next = 1 + (end > next->vm_end);
 	vma->vm_pgoff = pgoff;
 	trace_mmap_vma_resize_remap(current, vma, descr);  //pjh
 	if (adjust_next) {
-		trace_mmap_printk("adjust_next true, resizing next");
+		// For some reason I didn't disable this printk until I hit it
+		// in my trace analysis on Oct. 12... do I care about it? Or
+		// did I just forget to disable it along with the others?
+		//trace_mmap_printk("adjust_next true, resizing next");
 		trace_mmap_vma_resize_unmap(current, next, descr);  //pjh
 		next->vm_start += adjust_next << PAGE_SHIFT;
 		next->vm_pgoff += adjust_next;
