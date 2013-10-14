@@ -37,6 +37,9 @@
 #include <asm/mmu_context.h>
 #include "internal.h"
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/mmap.h>
+
 #if 0
 #define kenter(FMT, ...) \
 	printk(KERN_DEBUG "==> %s("FMT")\n", __func__, ##__VA_ARGS__)
@@ -804,6 +807,8 @@ static void delete_vma_from_mm(struct vm_area_struct *vma)
 static void delete_vma(struct mm_struct *mm, struct vm_area_struct *vma)
 {
 	kenter("%p", vma);
+	trace_mmap_printk("in NOMMU version of delete_vma() - not "
+			"instrumented yet!");
 	if (vma->vm_ops && vma->vm_ops->close)
 		vma->vm_ops->close(vma);
 	if (vma->vm_file)
@@ -1733,8 +1738,9 @@ SYSCALL_DEFINE2(munmap, unsigned long, addr, size_t, len)
 
 /*
  * release all the mappings made in a process's VM space
+ * PJH: struct task_struct *task added, but ignored for nommu case.
  */
-void exit_mmap(struct mm_struct *mm)
+void exit_mmap(struct mm_struct *mm, struct task_struct *task)
 {
 	struct vm_area_struct *vma;
 
@@ -2057,7 +2063,7 @@ int access_process_vm(struct task_struct *tsk, unsigned long addr, void *buf, in
 
 	len = __access_remote_vm(tsk, mm, addr, buf, len, write);
 
-	mmput(mm);
+	mmput(mm, tsk);
 	return len;
 }
 

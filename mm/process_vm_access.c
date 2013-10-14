@@ -328,7 +328,7 @@ static ssize_t process_vm_rw_core(pid_t pid, const struct iovec *lvec,
 
 	rc = bytes_copied;
 put_mm:
-	mmput(mm);
+	mmput(mm, task);
 
 put_task_struct:
 	put_task_struct(task);

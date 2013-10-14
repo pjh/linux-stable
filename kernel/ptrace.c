@@ -837,7 +837,7 @@ int ptrace_request(struct task_struct *child, long request,
 		default:
 			break;
 		}
-		mmput(mm);
+		mmput(mm, child);
 
 		ret = put_user(tmp, datalp);
 		break;

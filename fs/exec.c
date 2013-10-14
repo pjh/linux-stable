@@ -876,7 +876,19 @@ static int exec_mmap(struct mm_struct *mm)
 		BUG_ON(active_mm != old_mm);
 		setmax_mm_hiwater_rss(&tsk->signal->maxrss, old_mm);
 		mm_update_next_owner(old_mm);
-		mmput(old_mm);
+		/* PJH: the path to this function is:
+		 *   ... -> load_elf_binary -> flush_old_exec -> exec_mmap
+		 * This path is part of an *exec* of a new binary, so the current
+		 * process is releasing the "old_mm" (which was probably copied
+		 * into this process during a fork). After this function returns
+		 * back up to load_elf_binary (or load_*_binary for other
+		 * formats), there are trace events to reset this process'
+		 * simulation data to just the single vma now kept in 
+		 * "bprm->vma".
+		 * Anyway, for all of this, the "current" task is the right
+		 * context to pass to mmput; old_mm comes from current above.
+		 */
+		mmput(old_mm, current);
 		return 0;
 	}
 	mmdrop(active_mm);
@@ -1593,7 +1605,13 @@ static int do_execve_common(const char *filename,
 out:
 	if (bprm->mm) {
 		acct_arg_size(bprm, 0);
-		mmput(bprm->mm);
+		/* PJH: this is an error path - "bprm" is being prepared in the
+		 * context of the current task (for an execve) - see 
+		 * "current->in_execve = 1" above. So, if something fails,
+		 * we still want to put the bprm->mm using the current
+		 * task context.
+		 */
+		mmput(bprm->mm, current);
 	}
 
 out_file:

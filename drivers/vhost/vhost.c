@@ -399,7 +399,7 @@ err_cgroup:
 	dev->worker = NULL;
 err_worker:
 	if (dev->mm)
-		mmput(dev->mm);
+		mmput(dev->mm, NULL);
 	dev->mm = NULL;
 err_mm:
 	return err;
@@ -470,7 +470,7 @@ void vhost_dev_cleanup(struct vhost_dev *dev, bool locked)
 		dev->worker = NULL;
 	}
 	if (dev->mm)
-		mmput(dev->mm);
+		mmput(dev->mm, NULL);
 	dev->mm = NULL;
 }
 

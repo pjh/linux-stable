@@ -475,7 +475,7 @@ static int close(struct inode *inode, struct file *file)
 		 * Now all the memory cleanups are done, it's safe to release
 		 * the Launcher's memory management structure.
 		 */
-		mmput(lg->cpus[i].mm);
+		mmput(lg->cpus[i].mm, NULL);
 	}
 
 	/* Release any eventfds they registered. */

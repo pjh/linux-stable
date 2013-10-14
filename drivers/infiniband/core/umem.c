@@ -225,7 +225,7 @@ static void ib_umem_account(struct work_struct *work)
 	down_write(&umem->mm->mmap_sem);
 	umem->mm->pinned_vm -= umem->diff;
 	up_write(&umem->mm->mmap_sem);
-	mmput(umem->mm);
+	mmput(umem->mm, NULL);
 	kfree(umem);
 }
 
@@ -271,7 +271,7 @@ void ib_umem_release(struct ib_umem *umem)
 
 	current->mm->pinned_vm -= diff;
 	up_write(&mm->mmap_sem);
-	mmput(mm);
+	mmput(mm, NULL);
 	kfree(umem);
 }
 EXPORT_SYMBOL(ib_umem_release);

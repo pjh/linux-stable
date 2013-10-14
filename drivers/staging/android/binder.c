@@ -613,7 +613,7 @@ static int binder_update_page_range(struct binder_proc *proc, int allocate,
 	}
 	if (mm) {
 		up_write(&mm->mmap_sem);
-		mmput(mm);
+		mmput(mm, proc->tsk);
 	}
 	return 0;
 
@@ -635,7 +635,7 @@ err_alloc_page_failed:
 err_no_vma:
 	if (mm) {
 		up_write(&mm->mmap_sem);
-		mmput(mm);
+		mmput(mm, proc->tsk);
 	}
 	return -ENOMEM;
 }

@@ -499,7 +499,12 @@ static void exit_mm(struct task_struct * tsk)
 	enter_lazy_tlb(mm, current);
 	task_unlock(tsk);
 	mm_update_next_owner(mm);
-	mmput(mm);
+	/* PJH: exit_mm is only called from do_exit(), which is called from
+	 * lots of legitimate exit paths. In do_exit, the task that is
+	 * manipulated is "current", and that task is passed as an arg to
+	 * this function anyway, so use it for the mmput context here.
+	 */
+	mmput(mm, tsk);
 }
 
 /*

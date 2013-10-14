@@ -712,7 +712,7 @@ build_map_info(struct address_space *mapping, loff_t offset, bool is_register)
 
 	prev = curr;
 	while (curr) {
-		mmput(curr->mm);
+		mmput(curr->mm, NULL);
 		curr = curr->next;
 	}
 
@@ -779,7 +779,7 @@ register_for_each_vma(struct uprobe *uprobe, struct uprobe_consumer *new)
  unlock:
 		up_write(&mm->mmap_sem);
  free:
-		mmput(mm);
+		mmput(mm, NULL);
 		info = free_map_info(info);
 	}
  out:

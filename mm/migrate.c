@@ -1407,7 +1407,7 @@ SYSCALL_DEFINE6(move_pages, pid_t, pid, unsigned long, nr_pages,
 	else
 		err = do_pages_stat(mm, nr_pages, pages, status);
 
-	mmput(mm);
+	mmput(mm, task);
 	return err;
 
 out:

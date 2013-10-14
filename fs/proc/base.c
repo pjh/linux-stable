@@ -231,7 +231,7 @@ static int proc_pid_cmdline(struct task_struct *task, char * buffer)
 		}
 	}
 out_mm:
-	mmput(mm);
+	mmput(mm, task);
 out:
 	return res;
 }
@@ -249,7 +249,7 @@ static int proc_pid_auxv(struct task_struct *task, char *buffer)
 		if (res > PAGE_SIZE)
 			res = PAGE_SIZE;
 		memcpy(buffer, mm->saved_auxv, res);
-		mmput(mm);
+		mmput(mm, task);
 	}
 	return res;
 }
@@ -685,7 +685,7 @@ static int __mem_open(struct inode *inode, struct file *file, unsigned int mode)
 		/* ensure this mm_struct can't be freed */
 		atomic_inc(&mm->mm_count);
 		/* but do not pin its memory */
-		mmput(mm);
+		mmput(mm, task);
 	}
 
 	file->private_data = mm;
@@ -749,7 +749,7 @@ static ssize_t mem_rw(struct file *file, char __user *buf,
 	}
 	*ppos = addr;
 
-	mmput(mm);
+	mmput(mm, NULL);
 free:
 	free_page((unsigned long) page);
 	return copied;
@@ -853,7 +853,7 @@ static ssize_t environ_read(struct file *file, char __user *buf,
 		count -= retval;
 	}
 	*ppos = src;
-	mmput(mm);
+	mmput(mm, NULL);
 
 free:
 	free_page((unsigned long) page);
@@ -1413,7 +1413,7 @@ static int proc_exe_link(struct dentry *dentry, struct path *exe_path)
 	if (!mm)
 		return -ENOENT;
 	exe_file = get_mm_exe_file(mm);
-	mmput(mm);
+	mmput(mm, task);
 	if (exe_file) {
 		*exe_path = exe_file->f_path;
 		path_get(&exe_file->f_path);
@@ -1731,7 +1731,7 @@ static int map_files_d_revalidate(struct dentry *dentry, unsigned int flags)
 		up_read(&mm->mmap_sem);
 	}
 
-	mmput(mm);
+	mmput(mm, task);
 
 	if (exact_vma_exists) {
 		if (task_dumpable(task)) {
@@ -1795,7 +1795,7 @@ static int proc_map_files_get_link(struct dentry *dentry, struct path *path)
 	up_read(&mm->mmap_sem);
 
 out_mmput:
-	mmput(mm);
+	mmput(mm, task);
 out:
 	return rc;
 }
@@ -1877,7 +1877,7 @@ static struct dentry *proc_map_files_lookup(struct inode *dir,
 
 out_no_vma:
 	up_read(&mm->mmap_sem);
-	mmput(mm);
+	mmput(mm, task);
 out_put_task:
 	put_task_struct(task);
 out:
@@ -1964,7 +1964,7 @@ proc_map_files_readdir(struct file *filp, void *dirent, filldir_t filldir)
 				if (fa)
 					flex_array_free(fa);
 				up_read(&mm->mmap_sem);
-				mmput(mm);
+				mmput(mm, task);
 				goto out_put_task;
 			}
 			for (i = 0, vma = mm->mmap, pos = 2; vma;
@@ -1997,7 +1997,7 @@ proc_map_files_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		}
 		if (fa)
 			flex_array_free(fa);
-		mmput(mm);
+		mmput(mm, task);
 	}
 	}
 
@@ -2272,7 +2272,7 @@ static ssize_t proc_coredump_filter_read(struct file *file, char __user *buf,
 		len = snprintf(buffer, sizeof(buffer), "%08lx\n",
 			       ((mm->flags & MMF_DUMP_FILTER_MASK) >>
 				MMF_DUMP_FILTER_SHIFT));
-		mmput(mm);
+		mmput(mm, task);
 		ret = simple_read_from_buffer(buf, count, ppos, buffer, len);
 	}
 
@@ -2325,7 +2325,7 @@ static ssize_t proc_coredump_filter_write(struct file *file,
 			clear_bit(i + MMF_DUMP_FILTER_SHIFT, &mm->flags);
 	}
 
-	mmput(mm);
+	mmput(mm, task);
  out_no_mm:
 	put_task_struct(task);
  out_no_task:

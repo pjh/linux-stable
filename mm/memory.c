@@ -4167,7 +4167,7 @@ int access_process_vm(struct task_struct *tsk, unsigned long addr,
 		return 0;
 
 	ret = __access_remote_vm(tsk, mm, addr, buf, len, write);
-	mmput(mm);
+	mmput(mm, tsk);
 
 	return ret;
 }

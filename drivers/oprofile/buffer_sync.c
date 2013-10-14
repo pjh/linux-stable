@@ -403,7 +403,7 @@ static void release_mm(struct mm_struct *mm)
 	if (!mm)
 		return;
 	up_read(&mm->mmap_sem);
-	mmput(mm);
+	mmput(mm, NULL);
 }
 
 

@@ -197,7 +197,7 @@ static void user_pages_account(struct work_struct *_work)
 	down_write(&work->mm->mmap_sem);
 	work->mm->pinned_vm -= work->num_pages;
 	up_write(&work->mm->mmap_sem);
-	mmput(work->mm);
+	mmput(work->mm, NULL);
 	kfree(work);
 }
 
@@ -224,6 +224,6 @@ void ipath_release_user_pages_on_close(struct page **p, size_t num_pages)
 	return;
 
 bail_mm:
-	mmput(mm);
+	mmput(mm, NULL);
 	return;
 }

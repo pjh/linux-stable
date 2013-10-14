@@ -342,7 +342,8 @@ static inline void arch_dup_mmap(struct mm_struct *oldmm,
 
 static inline void arch_exit_mmap(struct mm_struct *mm)
 {
-	PVOP_VCALL1(pv_mmu_ops.exit_mmap, mm);
+	//PVOP_VCALL1(pv_mmu_ops.exit_mmap, mm);
+	PVOP_VCALL2(pv_mmu_ops.exit_mmap, mm, NULL);
 }
 
 static inline void __flush_tlb(void)

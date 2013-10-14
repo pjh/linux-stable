@@ -102,7 +102,7 @@ void xacct_add_tsk(struct taskstats *stats, struct task_struct *p)
 		/* adjust to KB unit */
 		stats->hiwater_rss   = get_mm_hiwater_rss(mm) * PAGE_SIZE / KB;
 		stats->hiwater_vm    = get_mm_hiwater_vm(mm)  * PAGE_SIZE / KB;
-		mmput(mm);
+		mmput(mm, p);
 	}
 	stats->read_char	= p->ioac.rchar & KB_MASK;
 	stats->write_char	= p->ioac.wchar & KB_MASK;

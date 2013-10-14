@@ -1764,7 +1764,7 @@ out:
 		struct mm_struct *mm = get_task_mm(p);
 		if (mm) {
 			setmax_mm_hiwater_rss(&maxrss, mm);
-			mmput(mm);
+			mmput(mm, p);
 		}
 	}
 	r->ru_maxrss = maxrss * (PAGE_SIZE / 1024); /* convert pages to KBs */

@@ -236,9 +236,10 @@ void unlink_file_vma(struct vm_area_struct *vma)
 
 /*
  * Close a vm structure and free it, returning the next.
+ * PJH: added task argument; see comments for mmput().
  */
 static struct vm_area_struct *remove_vma(struct vm_area_struct *vma,
-	const char *descr)
+	struct task_struct *task, const char *descr)
 {
 	struct vm_area_struct *next = vma->vm_next;
 
@@ -257,8 +258,11 @@ static struct vm_area_struct *remove_vma(struct vm_area_struct *vma,
 	 * (kmem_cache_free(vm_area_cachep, vma) below). I can't guarantee
 	 * that the code actually follows this invariant, but it would not
 	 * be unreasonable.
+	 *
+	 * What context is the free happening in? If task arg is non-null
+	 * then use that task, otherwise use current task.
 	 */
-	trace_mmap_vma_free(current, vma, descr);
+	trace_mmap_vma_free(task ? task : current, vma, descr);
 
 	might_sleep();
 	if (vma->vm_ops && vma->vm_ops->close)
@@ -2386,7 +2390,11 @@ static void remove_vma_list(struct mm_struct *mm, struct vm_area_struct *vma,
 		if (vma->vm_flags & VM_ACCOUNT)
 			nr_accounted += nrpages;
 		vm_stat_account(mm, vma->vm_flags, vma->vm_file, -nrpages);
-		vma = remove_vma(vma, descr);
+		/* PJH: assume that task we want to remove vmas from is "current";
+		 * remove_vma_list() is only called by do_munmap(), which appears
+		 * to be called for typical munmap operations.
+		 */
+		vma = remove_vma(vma, NULL, descr);
 	} while (vma);
 	vm_unacct_memory(nr_accounted);
 	validate_mm(mm);
@@ -2830,8 +2838,14 @@ unsigned long vm_brk(unsigned long addr, unsigned long len)
 }
 EXPORT_SYMBOL(vm_brk);
 
-/* Release all mmaps. */
-void exit_mmap(struct mm_struct *mm)
+/* Release all mmaps.
+ * PJH: added struct task_struct *task arg to specify exactly which
+ * task's mm is being removed here. See further explanation in comments
+ * for mmput(). Unfortunately, struct mm_struct only has a back-pointer
+ * to its task_struct when mm control groups are enabled, which I don't
+ * really want to rely on.
+ */
+void exit_mmap(struct mm_struct *mm, struct task_struct *task)
 {
 	struct mmu_gather tlb;
 	struct vm_area_struct *vma;
@@ -2872,7 +2886,7 @@ void exit_mmap(struct mm_struct *mm)
 	while (vma) {
 		if (vma->vm_flags & VM_ACCOUNT)
 			nr_accounted += vma_pages(vma);
-		vma = remove_vma(vma, "exit_mmap -> remove_vma");
+		vma = remove_vma(vma, task, "exit_mmap -> remove_vma");
 	}
 	vm_unacct_memory(nr_accounted);
 

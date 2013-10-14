@@ -503,6 +503,7 @@ seq_print_userip_objs(const struct userstack_entry *entry, struct trace_seq *s,
 	struct mm_struct *mm = NULL;
 	int ret = 1;
 	unsigned int i;
+	struct task_struct *task = NULL;
 
 //	printk(KERN_WARNING "PJH: seq_print_userip_objs: entered\n");
 
@@ -521,7 +522,6 @@ seq_print_userip_objs(const struct userstack_entry *entry, struct trace_seq *s,
 #ifndef PJH_ALWAYS_TRACE_SYM 
 	if (trace_flags & TRACE_ITER_SYM_USEROBJ) {
 #endif
-		struct task_struct *task;
 		/*
 		 * we do the lookup on the thread group leader,
 		 * since individual threads might have already quit!
@@ -577,7 +577,7 @@ seq_print_userip_objs(const struct userstack_entry *entry, struct trace_seq *s,
 	}
 
 	if (mm)
-		mmput(mm);
+		mmput(mm, task);
 	return ret;
 }
 

@@ -1173,7 +1173,7 @@ int try_to_unuse(unsigned int type, bool frontswap,
 		 * Don't hold on to start_mm if it looks like exiting.
 		 */
 		if (atomic_read(&start_mm->mm_users) == 1) {
-			mmput(start_mm);
+			mmput(start_mm, NULL);
 			start_mm = &init_mm;
 			atomic_inc(&init_mm.mm_users);
 		}
@@ -1221,7 +1221,7 @@ int try_to_unuse(unsigned int type, bool frontswap,
 				if (!atomic_inc_not_zero(&mm->mm_users))
 					continue;
 				spin_unlock(&mmlist_lock);
-				mmput(prev_mm);
+				mmput(prev_mm, NULL);
 				prev_mm = mm;
 
 				cond_resched();
@@ -1235,7 +1235,7 @@ int try_to_unuse(unsigned int type, bool frontswap,
 					retval = unuse_mm(mm, entry, page);
 
 				if (set_start_mm && *swap_map < swcount) {
-					mmput(new_start_mm);
+					mmput(new_start_mm, NULL);
 					atomic_inc(&mm->mm_users);
 					new_start_mm = mm;
 					set_start_mm = 0;
@@ -1243,8 +1243,8 @@ int try_to_unuse(unsigned int type, bool frontswap,
 				spin_lock(&mmlist_lock);
 			}
 			spin_unlock(&mmlist_lock);
-			mmput(prev_mm);
-			mmput(start_mm);
+			mmput(prev_mm, NULL);
+			mmput(start_mm, NULL);
 			start_mm = new_start_mm;
 		}
 		if (retval) {
@@ -1314,7 +1314,7 @@ int try_to_unuse(unsigned int type, bool frontswap,
 		}
 	}
 
-	mmput(start_mm);
+	mmput(start_mm, NULL);
 	return retval;
 }
 

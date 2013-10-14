@@ -1478,7 +1478,7 @@ SYSCALL_DEFINE4(migrate_pages, pid_t, pid, unsigned long, maxnode,
 	err = do_migrate_pages(mm, old, new,
 		capable(CAP_SYS_NICE) ? MPOL_MF_MOVE_ALL : MPOL_MF_MOVE);
 
-	mmput(mm);
+	mmput(mm, task);
 out:
 	NODEMASK_SCRATCH_FREE(scratch);
 

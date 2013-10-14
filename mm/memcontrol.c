@@ -6604,7 +6604,7 @@ static int mem_cgroup_can_attach(struct cgroup *cgroup,
 			if (ret)
 				mem_cgroup_clear_mc();
 		}
-		mmput(mm);
+		mmput(mm, p);
 	}
 	return ret;
 }
@@ -6766,7 +6766,7 @@ static void mem_cgroup_move_task(struct cgroup *cont,
 	if (mm) {
 		if (mc.to)
 			mem_cgroup_move_charge(mm);
-		mmput(mm);
+		mmput(mm, p);
 	}
 	if (mc.to)
 		mem_cgroup_clear_mc();

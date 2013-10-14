@@ -373,7 +373,7 @@ int proc_pid_status(struct seq_file *m, struct pid_namespace *ns,
 
 	if (mm) {
 		task_mem(m, mm);
-		mmput(mm);
+		mmput(mm, task);
 	}
 	task_sig(m, task);
 	task_cap(m, task);
@@ -554,7 +554,7 @@ static int do_task_stat(struct seq_file *m, struct pid_namespace *ns,
 
 	seq_putc(m, '\n');
 	if (mm)
-		mmput(mm);
+		mmput(mm, task);
 	return 0;
 }
 
@@ -578,7 +578,7 @@ int proc_pid_statm(struct seq_file *m, struct pid_namespace *ns,
 
 	if (mm) {
 		size = task_statm(mm, &shared, &text, &data, &resident);
-		mmput(mm);
+		mmput(mm, task);
 	}
 	/*
 	 * For quick read, open code by putting numbers directly

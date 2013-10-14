@@ -513,7 +513,7 @@ static int gntdev_open(struct inode *inode, struct file *flip)
 		}
 		priv->mn.ops = &gntdev_mmu_ops;
 		ret = mmu_notifier_register(&priv->mn, priv->mm);
-		mmput(priv->mm);
+		mmput(priv->mm, NULL);
 	}
 
 	if (ret) {

@@ -619,8 +619,27 @@ EXPORT_SYMBOL_GPL(__mmdrop);
 
 /*
  * Decrement the use count and release all resources for an mm.
+ *
+ * PJH: added the struct task_struct *task argument: a call to mmput
+ * may lead to an exit_mmap(), which unmaps all of the process' vmas
+ * and emits trace events that we care about. In some cases, mmput
+ * is called in a context that is not "current," potentially causing
+ * the exit_mmap() events to be interpreted as belonging to the current
+ * task when in fact those vmas should be unmapped (in my trace events)
+ * from the other task. I observed this scenario at least once for
+ * a dup_mmap that failed, causing mmput() -> exit_mmap() to be called
+ * in the "current" context when in fact it should have been called
+ * in the context of the new task.
+ *
+ * After adding this argument to mmput(), I examined the rest of the
+ * kernel code for mmput() calls and changed them to either pass the
+ * correct task (e.g. if a get_task_mm(task) or mm_access(task) closely
+ * precedes the mmput()), or to just pass NULL, which is taken to mean
+ * "use the current task context" in exit_mmap().
+ *   Files with calls to mmput() that really matter: fs/exec.c,
+ *   kernel/exit.c, kernel/fork.c
  */
-void mmput(struct mm_struct *mm)
+void mmput(struct mm_struct *mm, struct task_struct *task)
 {
 	might_sleep();
 
@@ -629,7 +648,7 @@ void mmput(struct mm_struct *mm)
 		exit_aio(mm);
 		ksm_exit(mm);
 		khugepaged_exit(mm); /* must run before exit_mmap */
-		exit_mmap(mm);
+		exit_mmap(mm, task);
 		set_mm_exe_file(mm, NULL);
 		if (!list_empty(&mm->mmlist)) {
 			spin_lock(&mmlist_lock);
@@ -710,7 +729,7 @@ struct mm_struct *mm_access(struct task_struct *task, unsigned int mode)
 	mm = get_task_mm(task);
 	if (mm && mm != current->mm &&
 			!ptrace_may_access(task, mode)) {
-		mmput(mm);
+		mmput(mm, task);
 		mm = ERR_PTR(-EACCES);
 	}
 	mutex_unlock(&task->signal->cred_guard_mutex);
@@ -863,7 +882,14 @@ struct mm_struct *dup_mm(struct task_struct *tsk)
 free_pt:
 	/* don't put binfmt in mmput, we haven't got module yet */
 	mm->binfmt = NULL;
-	mmput(mm);
+	/* PJH: ensure that this mmput executes in new "tsk" context, not
+	 * "current" context! Otherwise, when this mmput runs we may emit
+	 * trace events to remove vmas from "current" when they should
+	 * actually be removed from "tsk".
+	 */
+	mmput(mm, tsk);
+	trace_mmap_printk("dup_mm error - called mmput in new task tsk's "
+			"context, not current context!");
 
 fail_nomem:
 	return NULL;
@@ -1595,8 +1621,16 @@ bad_fork_cleanup_io:
 bad_fork_cleanup_namespaces:
 	exit_task_namespaces(p);
 bad_fork_cleanup_mm:
-	if (p->mm)
-		mmput(p->mm);
+	if (p->mm) {
+		/* PJH: ensure that this mmput executes in new task p's context,
+		 * not "current" context! Otherwise, when this mmput runs we may
+		 * emit trace events to remove vmas from "current" when they should
+		 * actually be removed from "tsk".
+		 */
+		mmput(p->mm, p);
+		trace_mmap_printk("copy_process error - called mmput in new "
+				"task p's context, not current context!");
+	}
 bad_fork_cleanup_signal:
 	if (!(clone_flags & CLONE_THREAD))
 		free_signal_struct(p->signal);

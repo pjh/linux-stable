@@ -308,7 +308,7 @@ static void put_pasid_state_wait(struct pasid_state *pasid_state)
 		schedule();
 
 	finish_wait(&pasid_state->wq, &wait);
-	mmput(pasid_state->mm);
+	mmput(pasid_state->mm, NULL);
 	free_pasid_state(pasid_state);
 }
 

@@ -1161,7 +1161,7 @@ static void xen_drop_mm_ref(struct mm_struct *mm)
  * pagetable because of lazy tlb flushing.  This means we need need to
  * switch all CPUs off this pagetable before we can unpin it.
  */
-static void xen_exit_mmap(struct mm_struct *mm)
+static void xen_exit_mmap(struct mm_struct *mm, struct task_struct *task)
 {
 	get_cpu();		/* make sure we don't move around */
 	xen_drop_mm_ref(mm);
@@ -2448,7 +2448,7 @@ static int xen_oldmem_pfn_is_ram(unsigned long pfn)
 }
 #endif
 
-static void xen_hvm_exit_mmap(struct mm_struct *mm)
+static void xen_hvm_exit_mmap(struct mm_struct *mm, struct task_struct *task)
 {
 	struct xen_hvm_pagetable_dying a;
 	int rc;

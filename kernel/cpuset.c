@@ -1037,7 +1037,7 @@ static void cpuset_change_nodemask(struct task_struct *p,
 	mpol_rebind_mm(mm, &cs->mems_allowed);
 	if (migrate)
 		cpuset_migrate_mm(mm, oldmem, &cs->mems_allowed);
-	mmput(mm);
+	mmput(mm, p);
 }
 
 static void *cpuset_being_rebound;
@@ -1475,7 +1475,7 @@ static void cpuset_attach(struct cgroup *cgrp, struct cgroup_taskset *tset)
 		if (is_memory_migrate(cs))
 			cpuset_migrate_mm(mm, &cpuset_attach_nodemask_from,
 					  &cpuset_attach_nodemask_to);
-		mmput(mm);
+		mmput(mm, leader);
 	}
 
 	cs->attach_in_progress--;

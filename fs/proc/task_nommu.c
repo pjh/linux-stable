@@ -245,7 +245,7 @@ static void m_stop(struct seq_file *m, void *_vml)
 	if (priv->task) {
 		struct mm_struct *mm = priv->task->mm;
 		up_read(&mm->mmap_sem);
-		mmput(mm);
+		mmput(mm, priv->task);
 		put_task_struct(priv->task);
 	}
 }

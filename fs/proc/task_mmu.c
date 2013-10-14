@@ -140,7 +140,7 @@ static void vma_stop(struct proc_maps_private *priv, struct vm_area_struct *vma)
 		struct mm_struct *mm = vma->vm_mm;
 		release_task_mempolicy(priv);
 		up_read(&mm->mmap_sem);
-		mmput(mm);
+		mmput(mm, NULL);
 	}
 }
 
@@ -208,7 +208,7 @@ out:
 	/* End of vmas has been reached */
 	m->version = (tail_vma != NULL)? 0: -1UL;
 	up_read(&mm->mmap_sem);
-	mmput(mm);
+	mmput(mm, priv->task);
 	return tail_vma;
 }
 
@@ -775,7 +775,7 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 		}
 		flush_tlb_mm(mm);
 		up_read(&mm->mmap_sem);
-		mmput(mm);
+		mmput(mm, task);
 	}
 	put_task_struct(task);
 
@@ -1101,7 +1101,7 @@ static ssize_t pagemap_read(struct file *file, char __user *buf,
 		ret = copied;
 
 out_mm:
-	mmput(mm);
+	mmput(mm, task);
 out_free:
 	kfree(pm.buffer);
 out_task:

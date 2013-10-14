@@ -240,7 +240,7 @@ struct pv_mmu_ops {
 			    struct mm_struct *next);
 	void (*dup_mmap)(struct mm_struct *oldmm,
 			 struct mm_struct *mm);
-	void (*exit_mmap)(struct mm_struct *mm);
+	void (*exit_mmap)(struct mm_struct *mm, struct task_struct *task);
 
 
 	/* TLB operations */
