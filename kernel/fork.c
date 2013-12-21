@@ -1711,6 +1711,35 @@ long do_fork(unsigned long clone_flags,
 			return -EINVAL;
 	}
 
+	/* PJH: just for debugging, remove for real trace analysis!
+	 * Check: does clone_flags have CLONE_VM set, but not CLONE_THREAD
+	 * nor CLONE_PARENT? If so, then the new clone will have the calling
+	 * process as its parent, and will be placed in a separate thread
+	 * group, BUT the clone will actually run in the same memory address
+	 * space!
+	 *
+	 * Why would one want to do this? To avoid the work of duplicating
+	 * the process' memory map when you're just going to immediately
+	 * EXEC anyway! I'm guessing that some sneaky applications (e.g.
+	 * 'make' during a kernel build) are now calling clone-exec in this
+	 * way rather than the traditional fork-exec.
+	 *   I guess if you weren't going to immediately exec, you could
+	 *   also do this and make it work by setting child_stack (start_stack)
+	 *   to a different location than the caller's stack... but then you
+	 *   would probably want to just set CLONE_THREAD to create a new
+	 *   thread in the same tgid.
+	 *
+	 * When enabled, this condition was hit exactly as expected during
+	 * a kernel-build trace.
+	 */
+	//if ( (clone_flags & CLONE_VM) && 
+	//	!(clone_flags & (CLONE_THREAD | CLONE_PARENT))) {
+	//	trace_mmap_printk("do_fork: clone_flags has CLONE_VM, but not "
+	//			"CLONE_THREAD nor CLONE_PARENT - new 'thread' in the "
+	//			"same address space, but with a different tgid? Expect "
+	//			"an exec (__bprm_mm_init) event to soon follow!");
+	//}
+
 	/*
 	 * Determine whether and which event to report to ptracer.  When
 	 * called from kernel_thread or CLONE_UNTRACED is explicitly

@@ -767,11 +767,26 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	 * with the trace event here, we'd like to "reconstruct" the alloc,
 	 * unmap, and remap of the lone vma that is now part of the process'
 	 * memory map. We do that with the trace events below:
+	 *
+	 * UPDATE: December 2013: now that I've gotten rid of Pin tracing in
+	 * my analysis, this no longer seems necessary. In addition, this
+	 * reset here could potentially cause inaccuracies in my analysis,
+	 * because this code path is hit for operations other than a
+	 * "traditional" fork-exec (e.g. a clone-exec, as performed by
+	 * 'make' during a kernel build), and I'm not sure that trying
+	 * to "reproduce" the events here is always going to be accurate.
+	 * Finally, having events happen but then resetting them later
+	 * is problematic for my time-series plots in a multiprocess
+	 * setting: as the trace is analyzed, many events from many tgids
+	 * are attributed to the top-level process, but then when the
+	 * mmap for a single tgid is reset here, it is very inconvenient
+	 * to have to "undo" the tgid's operations that were already
+	 * attributed to the top-level process.
 	 */
-	trace_mmap_reset_sim(current, "load_elf_binary for execve");
-	trace_mmap_vma_alloc(current, bprm->vma, "load_elf_binary");
-	trace_mmap_vma_resize_unmap(current, bprm->vma, "load_elf_binary");
-	trace_mmap_vma_resize_remap(current, bprm->vma, "load_elf_binary");
+	//trace_mmap_reset_sim(current, "load_elf_binary for execve");
+	//trace_mmap_vma_alloc(current, bprm->vma, "load_elf_binary");
+	//trace_mmap_vma_resize_unmap(current, bprm->vma, "load_elf_binary");
+	//trace_mmap_vma_resize_remap(current, bprm->vma, "load_elf_binary");
 
 	/* Do this so that we can load the interpreter, if need be.  We will
 	   change some of these later */
