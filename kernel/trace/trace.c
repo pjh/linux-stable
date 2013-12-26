@@ -978,7 +978,18 @@ void tracing_reset_current_online_cpus(void)
 	tracing_reset_online_cpus(&global_trace);
 }
 
-#define SAVED_CMDLINES 128
+/* PJH: in highly multi-process application traces (e.g. a kernel build),
+ * it looks like the saved_cmdlines ring buffer overflows, and by the time
+ * we print out the trace (trace_print_context() -> trace_find_cmdline()),
+ * the cmdline for the task is no longer available and we just get '<...>'
+ * in the output, which is very unhelpful. So, for now, let's set
+ * SAVED_CMDLINES to PID_MAX_DEFAULT rather than just 128, so that we'll
+ * rarely / never forget old cmdlines; this increases the memory cost
+ * from 128 * TASK_COMM_LEN (16) = 2 KB to 32768 * 16 = 524288 = 512 KB,
+ * but oh well; we don't really care much for our analysis purposes right
+ * now.
+ */
+#define SAVED_CMDLINES PID_MAX_DEFAULT
 #define NO_CMDLINE_MAP UINT_MAX
 static unsigned map_pid_to_cmdline[PID_MAX_DEFAULT+1];
 static unsigned map_cmdline_to_pid[SAVED_CMDLINES];
@@ -1159,7 +1170,8 @@ void trace_find_cmdline(int pid, char comm[])
 	if (map != NO_CMDLINE_MAP)
 		strcpy(comm, saved_cmdlines[map]);
 	else
-		strcpy(comm, "<...>");
+		strcpy(comm, "<cmdnotsaved>");   //PJH
+		//strcpy(comm, "<...>");
 
 	arch_spin_unlock(&trace_cmdline_lock);
 	preempt_enable();
