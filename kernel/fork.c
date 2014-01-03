@@ -1369,8 +1369,13 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	retval = copy_signal(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_sighand;
-#define PJH_FORK
-#ifdef PJH_FORK
+
+//#define PJH_SETPID_EARLY
+#define PJH_SETPID_NORMAL
+//#define PJH_SETPARENTS_EARLY
+#define PJH_SETPARENTS_NORMAL
+
+#ifdef PJH_SETPID_EARLY
 	/* Move the code that sets the pid / tgid from below to right here, so
 	 * that I can access the pid / tgid from copy_mm() -> dup_mm() ->
 	 * dup_mmap(). I hope that changing this ordering doesn't mess up
@@ -1388,7 +1393,27 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * to the kernel code paths (as opposed to just "rearranging" here...)
 	 * if at all possible. For that reason I chose this approach to start,
 	 * because it utilizes the loop over the mmap that is already performed
-	 * in dup_mmap(). 
+	 * in dup_mmap().
+	 *
+	 * UPDATE: January 2 2014: I've discovered that these code changes here
+	 * actually DO cause some kind of problem, triggered by running
+	 * Chromium! I don't really know what's going wrong, but it causes
+	 * Chromium to segfault in userspace, and during the printing of
+	 * the segfault in the kernel log messages a kernel NULL pointer
+	 * dereference is hit as well (on the code path: __do_page_fault ->
+	 * __bad_area_nosemaphore -> show_signal_msg -> print_vma_addr).
+	 *   Hypothesis: Chromium uses pid "namespaces", unlike unlike every
+	 *     other program that I've run, and this causes some failure path
+	 *     to be hit here?
+	 *
+	 * I'm not sure what the proper fix is:
+	 *   For the first half of this code (the pid / tgid-setting), do the
+	 *   same thing that I do below for parent-setting code: repeat the
+	 *   execution to make sure that it's right?
+	 *
+	 *   Remove Chromium config and then retry?
+	 *   Uninstall and then reinstall Chromium?
+	 *   Just run Chrome instead of Chromium? Seems to hit problems too.
 	 */
 	if (pid != &init_struct_pid) {
 		retval = -ENOMEM;
@@ -1407,7 +1432,9 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * Clear TID on mm_release()?
 	 */
 	p->clear_child_tid = (clone_flags & CLONE_CHILD_CLEARTID) ? child_tidptr : NULL;
+#endif
 
+#ifdef PJH_SETPARENTS_EARLY
 	/* Update: we need the real_parent field to be set by this point
 	 * as well, because we may print out the parent's tgid in our trace
 	 * messages. Looking through the code between this point and the
@@ -1468,7 +1495,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	if (retval)
 		goto bad_fork_cleanup_io;
 
-#ifndef PJH_FORK
+#ifdef PJH_SETPID_NORMAL
 	if (pid != &init_struct_pid) {
 		retval = -ENOMEM;
 		pid = alloc_pid(p->nsproxy->pid_ns);
@@ -1543,6 +1570,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	/* Need tasklist lock for parent etc handling! */
 	write_lock_irq(&tasklist_lock);
 
+#ifdef PJH_SETPARENTS_NORMAL
 	/* CLONE_PARENT re-uses the old parent */
 	if (clone_flags & (CLONE_PARENT|CLONE_THREAD)) {
 		p->real_parent = current->real_parent;
@@ -1551,6 +1579,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		p->real_parent = current;
 		p->parent_exec_id = current->self_exec_id;
 	}
+#endif
 
 	spin_lock(&current->sighand->siglock);
 
