@@ -67,8 +67,6 @@
 #include <asm/tlbflush.h>
 #include <asm/pgtable.h>
 
-#include <trace/events/mmap.h>
-
 #include "internal.h"
 
 #ifdef LAST_NID_NOT_IN_PAGE_FLAGS

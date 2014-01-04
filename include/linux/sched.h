@@ -2259,7 +2259,8 @@ extern struct mm_struct *mm_access(struct task_struct *task, unsigned int mode);
 /* Remove the current tasks stale references to the old mm_struct */
 extern void mm_release(struct task_struct *, struct mm_struct *);
 /* Allocate a new mm structure and copy contents from tsk->mm */
-extern struct mm_struct *dup_mm(struct task_struct *tsk);
+extern struct mm_struct *dup_mm(struct task_struct *tsk, pid_t trace_pid,
+		pid_t trace_tgid, struct task_struct *trace_real_parent);
 
 extern int copy_thread(unsigned long, unsigned long, unsigned long,
 			struct task_struct *);

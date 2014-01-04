@@ -346,7 +346,8 @@ free_tsk:
 
 #ifdef CONFIG_MMU
 static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm,
-	struct task_struct *new_tsk)
+	struct task_struct *new_tsk, pid_t trace_pid, pid_t trace_tgid,
+	struct task_struct *trace_real_parent)
 {
 	struct vm_area_struct *mpnt, *tmp, *prev, **pprev;
 	struct rb_node **rb_link, *rb_parent;
@@ -472,7 +473,8 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm,
 		 * By passing new_tsk, rather than current, to trace_mmap_vma_alloc(),
 		 * the correct pid and tgid should now be captured... I hope.
 		 */
-		trace_mmap_vma_alloc(new_tsk, tmp, "dup_mmap");
+		trace_mmap_vma_alloc_dup_mmap(tmp, trace_pid, trace_tgid,
+				trace_real_parent);
 
 		if (retval)
 			goto out;
@@ -509,7 +511,7 @@ static inline void mm_free_pgd(struct mm_struct *mm)
 	pgd_free(mm, mm->pgd);
 }
 #else
-#define dup_mmap(mm, oldmm, tsk)	(0)
+#define dup_mmap(mm, oldmm, tsk, trace_pid, trace_tgid, trace_real_parent) (0)
 #define mm_alloc_pgd(mm)	(0)
 #define mm_free_pgd(mm)
 #endif /* CONFIG_MMU */
@@ -838,7 +840,8 @@ void mm_release(struct task_struct *tsk, struct mm_struct *mm)
  * Allocate a new mm structure and copy contents from the
  * mm structure of the passed in task structure.
  */
-struct mm_struct *dup_mm(struct task_struct *tsk)
+struct mm_struct *dup_mm(struct task_struct *tsk, pid_t trace_pid,
+		pid_t trace_tgid, struct task_struct *trace_real_parent)
 {
 	struct mm_struct *mm, *oldmm = current->mm;
 	int err;
@@ -867,7 +870,7 @@ struct mm_struct *dup_mm(struct task_struct *tsk)
 
 	dup_mm_exe_file(oldmm, mm);
 
-	err = dup_mmap(mm, oldmm, tsk);
+	err = dup_mmap(mm, oldmm, tsk, trace_pid, trace_tgid, trace_real_parent);
 	if (err)
 		goto free_pt;
 
@@ -904,7 +907,16 @@ fail_nocontext:
 	return NULL;
 }
 
-static int copy_mm(unsigned long clone_flags, struct task_struct *tsk)
+/* PJH: added args that are needed to print fork messages correctly.
+ * From struct task_struct:
+ *   pid_t pid;
+ *   pid_t tgid;
+ *   struct task_struct __rcu *real_parent;
+ * I'm not sure what the __rcu is for on real_parent...
+ */
+static int copy_mm(unsigned long clone_flags, struct task_struct *tsk,
+		pid_t trace_pid, pid_t trace_tgid,
+		struct task_struct *trace_real_parent)
 {
 	struct mm_struct *mm, *oldmm;
 	int retval;
@@ -934,7 +946,7 @@ static int copy_mm(unsigned long clone_flags, struct task_struct *tsk)
 	}
 
 	retval = -ENOMEM;
-	mm = dup_mm(tsk);
+	mm = dup_mm(tsk, trace_pid, trace_tgid, trace_real_parent);
 	if (!mm)
 		goto fail_nomem;
 
@@ -1177,6 +1189,9 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 {
 	int retval;
 	struct task_struct *p;
+	pid_t trace_pid;
+	pid_t trace_tgid;
+	struct task_struct *trace_real_parent;
 
 	if ((clone_flags & (CLONE_NEWNS|CLONE_FS)) == (CLONE_NEWNS|CLONE_FS))
 		return ERR_PTR(-EINVAL);
@@ -1370,6 +1385,24 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	if (retval)
 		goto bad_fork_cleanup_sighand;
 
+/* What I've found from setting these #defines and running Chromium:
+ *   Enabling SETPID_EARLY always causes failure. If SETPID_NORMAL is
+ *     not enabled along with it, then Chromium will either generate
+ *     a segfault in userspace or will cause an abrupt system reboot.
+ *     (the segfault happens when SETPARENTS_EARLY and SETPARENTS_NORMAL
+ *     are both set; otherwise, the reboot happens?).
+ *     If SETPID_NORMAL is also enabled, then the system will not even
+ *     boot, regardless of how SETPARENTS is set.
+ *   When just SETPID_NORMAL is enabled, then Chromium will run normally
+ *     when just SETPARENTS_NORMAL is enabled. I didn't try any other
+ *     cases with SETPID_NORMAL yet.
+ *
+ * Alternative approach: take the "early" pid, tgid, and parent values
+ * here and pass them through to a new type of trace event in copy_mm ->
+ * dup_mm -> dup_mmap. This adds a little extra overhead, but these
+ * function calls are only made once.
+ *   To avoid side-effects, need a new struct pid pointer as well... oyy.
+ */
 //#define PJH_SETPID_EARLY
 #define PJH_SETPID_NORMAL
 //#define PJH_SETPARENTS_EARLY
@@ -1482,7 +1515,38 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	//write_unlock_irq(&tasklist_lock);   // bad idea?!
 #endif
 
-	retval = copy_mm(clone_flags, p);
+	/* PJH: uh-oh: if we want to do the pid stuff correctly here, we still
+	 * have to run this code block which has side-effects first, and
+	 * not run it again later, so we're still relocating the code...
+	 *   I don't want to mess with this further by e.g. allocating a
+	 *   temporary pid here just for tracing purposes, since I don't
+	 *   know if / how to free it...
+	 */
+#define ALLOC_PID_EARLY
+#ifdef ALLOC_PID_EARLY
+	if (pid != &init_struct_pid) {
+		retval = -ENOMEM;
+		pid = alloc_pid(p->nsproxy->pid_ns);
+		if (!pid)
+			goto bad_fork_cleanup_io;
+	}
+#endif	
+
+	if (pid)
+		trace_pid = pid_nr(pid);
+	else
+		trace_pid = -1;
+	trace_tgid = trace_pid;
+	if (clone_flags & CLONE_THREAD)
+		trace_tgid = current->tgid;
+
+	if (clone_flags & (CLONE_PARENT|CLONE_THREAD)) {
+		trace_real_parent = current->real_parent;
+	} else {
+		trace_real_parent = current;
+	}
+	
+	retval = copy_mm(clone_flags, p, trace_pid, trace_tgid, trace_real_parent);
 	if (retval)
 		goto bad_fork_cleanup_signal;
 	retval = copy_namespaces(clone_flags, p);
@@ -1496,12 +1560,22 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		goto bad_fork_cleanup_io;
 
 #ifdef PJH_SETPID_NORMAL
+#ifndef ALLOC_PID_EARLY
+	/* Eureka! When this block of code is executed before the block of
+	 * copy_{mm, namespaces, io, thread} functions, it causes the segfault
+	 * and subsequent NULL pointer dereference when Chromium starts!
+	 *   Seems most likely that this block of code depends on copy_namespaces;
+	 *   if I execute that before this, then would it work ok?
+	 * What the heck is this block of code actually doing??
+	 *
+	 */
 	if (pid != &init_struct_pid) {
 		retval = -ENOMEM;
 		pid = alloc_pid(p->nsproxy->pid_ns);
 		if (!pid)
 			goto bad_fork_cleanup_io;
 	}
+#endif
 
 	p->pid = pid_nr(pid);
 	p->tgid = p->pid;

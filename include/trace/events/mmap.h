@@ -190,6 +190,91 @@ DEFINE_EVENT(mmap_vma, mmap_vma_flags_remap,
 	TP_ARGS(cur_task, vma, label)
 );
 
+/* New special event for dup_mmap function:
+ */
+TRACE_EVENT(mmap_vma_alloc_dup_mmap,
+	TP_PROTO(struct vm_area_struct *vma,
+		pid_t trace_pid,
+		pid_t trace_tgid,
+		struct task_struct *trace_real_parent),
+	TP_ARGS(vma, trace_pid, trace_tgid, trace_real_parent),
+	TP_STRUCT__entry(
+		__field(pid_t, pid)
+		__field(pid_t, tgid)
+		__field(pid_t, ptgid)
+		__field(struct vm_area_struct *, vma)
+		__field(unsigned long, vm_start)
+		__field(unsigned long, vm_end)
+		__field(unsigned long, vm_flags)
+		__field(unsigned long long, vm_pgoff)
+		__field(unsigned int, dev_major)
+		__field(unsigned int, dev_minor)
+		__field(unsigned long, inode)
+		__array(char, filename, PJH_BUF_LEN)
+	),
+	TP_fast_assign(
+		__entry->pid   = trace_pid;
+		__entry->tgid  = trace_tgid;
+		/* Grab parent's tgid: this extra pointer dereference is kind of
+		 * a bummer, but hopefully not much performance impact.
+		 */
+		__entry->ptgid = trace_real_parent ?
+		                 trace_real_parent->tgid : -1;
+		__entry->vma = vma;
+		__entry->vm_start =
+			stack_guard_page_start(vma, vma->vm_start) ?
+				vma->vm_start + PAGE_SIZE :
+				vma->vm_start;
+		__entry->vm_end =
+			stack_guard_page_end(vma, vma->vm_end) ?
+				vma->vm_end - PAGE_SIZE :
+				vma->vm_end;
+		__entry->vm_flags = vma->vm_flags;
+		__entry->vm_pgoff =
+			vma->vm_file ? ((loff_t)(vma->vm_pgoff)) << PAGE_SHIFT : 0;
+		__entry->dev_major =
+			vma->vm_file ? MAJOR(file_inode(vma->vm_file)->i_sb->s_dev) : 0;
+		__entry->dev_minor = 
+			vma->vm_file ? MINOR(file_inode(vma->vm_file)->i_sb->s_dev) : 0;
+		__entry->inode = 
+			vma->vm_file ? file_inode(vma->vm_file)->i_ino : 0;
+		if (vma->vm_file) {
+			char *path = d_path(&(vma->vm_file->f_path),
+				(char *)(__entry->filename), PJH_BUF_LEN);
+			strncpy(__entry->filename, path, PJH_BUF_LEN-1);
+			  // I hope the kernel strncpy works with overlapping strings!
+			  //   Seems to work just fine...
+		} else {
+			__entry->filename[0] = '\0';
+		}
+		__entry->filename[PJH_BUF_LEN-1] = '\0';  //defensive
+		//TODO: add code for special cases of filename: [heap], [vdso],
+		//  [stack], [vsyscall]
+	),
+
+	/* See definition of vm_area_struct in include/linux/mm_types.h.
+	 * Imitate printing of a vma entry in fs/proc/task_mmu.c:show_map_vma().
+	 *   00400000-0040c000 r-xp 00000000 fd:01 41038  /bin/cat
+	 */
+	TP_printk("pid=%d tgid=%d ptgid=%d [dup_mmap]: %p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
+		__entry->pid,
+		__entry->tgid,
+		__entry->ptgid,
+		__entry->vma,
+		__entry->vm_start,
+		__entry->vm_end,
+		__entry->vm_flags & VM_READ ? 'r' : '-',
+		__entry->vm_flags & VM_WRITE ? 'w' : '-',
+		__entry->vm_flags & VM_EXEC ? 'x' : '-',
+		__entry->vm_flags & VM_MAYSHARE ? 's' : 'p',
+		__entry->vm_pgoff,
+		__entry->dev_major,
+		__entry->dev_minor,
+		__entry->inode,
+		__entry->filename
+		)
+);
+
 /* Define a class of trace events, "mmap_sim_event", that all take the
  * same args and have the same output. Unlike the mmap_vma class of
  * events, these events don't take a specific vma as an argument.
