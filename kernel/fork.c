@@ -346,8 +346,7 @@ free_tsk:
 
 #ifdef CONFIG_MMU
 static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm,
-	struct task_struct *new_tsk, pid_t trace_pid, pid_t trace_tgid,
-	struct task_struct *trace_real_parent)
+	pid_t trace_pid, pid_t trace_tgid, struct task_struct *trace_real_parent)
 {
 	struct vm_area_struct *mpnt, *tmp, *prev, **pprev;
 	struct rb_node **rb_link, *rb_parent;
@@ -511,7 +510,7 @@ static inline void mm_free_pgd(struct mm_struct *mm)
 	pgd_free(mm, mm->pgd);
 }
 #else
-#define dup_mmap(mm, oldmm, tsk, trace_pid, trace_tgid, trace_real_parent) (0)
+#define dup_mmap(mm, oldmm, trace_pid, trace_tgid, trace_real_parent) (0)
 #define mm_alloc_pgd(mm)	(0)
 #define mm_free_pgd(mm)
 #endif /* CONFIG_MMU */
@@ -870,7 +869,7 @@ struct mm_struct *dup_mm(struct task_struct *tsk, pid_t trace_pid,
 
 	dup_mm_exe_file(oldmm, mm);
 
-	err = dup_mmap(mm, oldmm, tsk, trace_pid, trace_tgid, trace_real_parent);
+	err = dup_mmap(mm, oldmm, trace_pid, trace_tgid, trace_real_parent);
 	if (err)
 		goto free_pt;
 
@@ -1385,198 +1384,89 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	if (retval)
 		goto bad_fork_cleanup_sighand;
 
-/* What I've found from setting these #defines and running Chromium:
- *   Enabling SETPID_EARLY always causes failure. If SETPID_NORMAL is
- *     not enabled along with it, then Chromium will either generate
- *     a segfault in userspace or will cause an abrupt system reboot.
- *     (the segfault happens when SETPARENTS_EARLY and SETPARENTS_NORMAL
- *     are both set; otherwise, the reboot happens?).
- *     If SETPID_NORMAL is also enabled, then the system will not even
- *     boot, regardless of how SETPARENTS is set.
- *   When just SETPID_NORMAL is enabled, then Chromium will run normally
- *     when just SETPARENTS_NORMAL is enabled. I didn't try any other
- *     cases with SETPID_NORMAL yet.
- *
- * Alternative approach: take the "early" pid, tgid, and parent values
- * here and pass them through to a new type of trace event in copy_mm ->
- * dup_mm -> dup_mmap. This adds a little extra overhead, but these
- * function calls are only made once.
- *   To avoid side-effects, need a new struct pid pointer as well... oyy.
- */
-//#define PJH_SETPID_EARLY
-#define PJH_SETPID_NORMAL
-//#define PJH_SETPARENTS_EARLY
-#define PJH_SETPARENTS_NORMAL
-
-#ifdef PJH_SETPID_EARLY
-	/* Move the code that sets the pid / tgid from below to right here, so
-	 * that I can access the pid / tgid from copy_mm() -> dup_mm() ->
-	 * dup_mmap(). I hope that changing this ordering doesn't mess up
-	 * anything else...
+	/* PJH: ok, so before calling copy_mm, I need to know the pid,
+	 * tgid, and parent of the process being forked before emitting
+	 * the eventual dup_mmap trace events. The setting of these fields
+	 * in this function usually happens after the call to copy_mm though,
+	 * so I tried moving those lines to run before the copy_mm call. This
+	 * seemed to work fine for a while, but I discovered that doing this
+	 * caused Chromium to fail in unusual ways. Further investigation
+	 * revealed that moving the pid/tgid/parent code earlier in the
+	 * function interfered with the call to copy_namespaces, a feature
+	 * (part of Linux control groups) that only Chromium uses out of all
+	 * the applications I'm running on my machine, apparently.
 	 *
-	 * If it does turn out that this approach doesn't work, an alternative
-	 * approach would be to add a "trace_mmap_vma_fork()" call in the
-	 * do_fork() function. However, the problem with that is that inside
-	 * of the trace event framework, there's no way to execute a loop
-	 * (i.e. to print out an event for every vma in the forked process'
-	 * new mmap). This means that trace_mmap_vma_fork() would have to
-	 * be called in a loop added to do_fork(); this isn't terribly
-	 * unreasonable, and should have minimal / no impact when trace
-	 * events are disabled I guess, but I'd like to avoid actually adding
-	 * to the kernel code paths (as opposed to just "rearranging" here...)
-	 * if at all possible. For that reason I chose this approach to start,
-	 * because it utilizes the loop over the mmap that is already performed
-	 * in dup_mmap().
+	 * What the heck is the alloc_pid block of code actually doing?
+	 *   What's init_struct_pid (INIT_STRUCT_PID)? A "struct pid" struct:
+	 *   used in a few locations as an "initial" pid...
+	 *     include/linux/pid.h defines struct pid; init_struct_pid has
+	 *     count = 1, three lists of tasks representing the three
+	 *     pid *types* (enum pid_type: PIDTYPE_{PID,PGID,SID}), level 0,
+	 *     and a "struct upid", which is used for keeping track of the pid
+	 *     as seen by a particular *pid namespace*.
+	 *     include/linux/pid.h has a small description at the top of how /
+	 *     why these two structs are used.
+	 *   What is the "pid" variable in this function? It's passed as an
+	 *   argument and not touched until this point - most of the time it
+	 *   is NULL (from the usual copy_process code), so this block of
+	 *   code WILL be entered. The only time it's set to &init_struct_pid
+	 *   is when it's being used to fork special "idle" processes.
 	 *
-	 * UPDATE: January 2 2014: I've discovered that these code changes here
-	 * actually DO cause some kind of problem, triggered by running
-	 * Chromium! I don't really know what's going wrong, but it causes
-	 * Chromium to segfault in userspace, and during the printing of
-	 * the segfault in the kernel log messages a kernel NULL pointer
-	 * dereference is hit as well (on the code path: __do_page_fault ->
-	 * __bad_area_nosemaphore -> show_signal_msg -> print_vma_addr).
-	 *   Hypothesis: Chromium uses pid "namespaces", unlike unlike every
-	 *     other program that I've run, and this causes some failure path
-	 *     to be hit here?
+	 *   Ok, so the pid that gets allocated depends on "p->nsproxy->pid_ns":
+	 *   this is a "struct pid_namespace *ns".
+	 *     In alloc_pid(), this argument determines the kmem_cache that
+	 *     pids are allocated from! (I guess different namespaces may
+	 *     keep separate caches (different structs??) for pids...)...
+	 *     ok ok, I see that this function depends *heavily* on the pid
+	 *     namespace.
+	 *     Does copy_namespaces() change anything in p->nsproxy->...? You
+	 *     betcha - if the clone flags contain any of CLONE_{NEWNS, NEWUTS,
+	 *     NEWIPC, NEWPID, or NEWNET}, then a new struct nsproxy will be
+	 *     allocated for this struct task_struct *p!
 	 *
-	 * I'm not sure what the proper fix is:
-	 *   For the first half of this code (the pid / tgid-setting), do the
-	 *   same thing that I do below for parent-setting code: repeat the
-	 *   execution to make sure that it's right?
-	 *
-	 *   Remove Chromium config and then retry?
-	 *   Uninstall and then reinstall Chromium?
-	 *   Just run Chrome instead of Chromium? Seems to hit problems too.
+	 * So, upshot: I think that if I just move the copy_namespaces
+	 * call and the alloc_pid block to BEFORE the copy_mm call, then this
+	 * will all work fine!
+	 *   Does copy_mm have anything to do with the namespace stuff? Any
+	 *   reason why putting copy_namespaces before copy_mm might fail?
+	 *   I don't see one - I traced the use of *p down through copy_mm,
+	 *   and it doesn't look like it cares about p->nsproxy anywhere,
+	 *   so seems like it should be fine to reorder these calls.
 	 */
+	retval = copy_namespaces(clone_flags, p);
+	if (retval)
+		goto bad_fork_cleanup_signal;
+
 	if (pid != &init_struct_pid) {
 		retval = -ENOMEM;
 		pid = alloc_pid(p->nsproxy->pid_ns);
 		if (!pid)
-			goto bad_fork_cleanup_io;
+			goto bad_fork_cleanup_namespaces;
 	}
 
-	p->pid = pid_nr(pid);
-	p->tgid = p->pid;
-	if (clone_flags & CLONE_THREAD)
-		p->tgid = current->tgid;
-
-	p->set_child_tid = (clone_flags & CLONE_CHILD_SETTID) ? child_tidptr : NULL;
-	/*
-	 * Clear TID on mm_release()?
+	/* PJH: To be extra-safe, I also don't actually move the pid/tgid/parent
+	 * setting code to run after the alloc_pid block here - I just make
+	 * temporary copies of the values that I need and pass them through
+	 * to a new type of trace event in copy_mm -> dup_mm -> dup_mmap. This
+	 * adds a little extra overhead, but these function calls are only
+	 * made once, so it's not a big deal.
 	 */
-	p->clear_child_tid = (clone_flags & CLONE_CHILD_CLEARTID) ? child_tidptr : NULL;
-#endif
-
-#ifdef PJH_SETPARENTS_EARLY
-	/* Update: we need the real_parent field to be set by this point
-	 * as well, because we may print out the parent's tgid in our trace
-	 * messages. Looking through the code between this point and the
-	 * original CLONE_PARENT code location, I don't see any other
-	 * modifications of clone_flags, current->real_parent, or
-	 * current->parent_exec_id, so I think it should be safe to move
-	 * this code up here.
-	 * Oh, according to the original code, we "Need tasklist lock for
-	 * parent etc handling!" - so, add an extra lock / unlock around
-	 * this code?!
-	 *   This is adding non-trace overhead to the kernel code!
-	 *   Ideally we'd like to avoid this, but hopefully not much impact...
-	 * Actually, I don't like this idea - if we lock here, set some
-	 * stuff, then unlock, then re-lock later and set some more stuff,
-	 * it seems like something (e.g. part of "current") could change
-	 * while unlocked, and the things will be set based on different
-	 * stuff. Another idea, with less fidelity potentially, but without
-	 * possible race condition when setting p's fields: set these fields
-	 * once here while not locked, then set them again "normally" below
-	 * while locked. This means that our trace events in copy_mm ->
-	 * dup_mm -> dup_mmap will likely (but not guaranteedly) have the
-	 * right real_parent pointer; in the unlikely event that they do
-	 * not, then maybe our analysis will fail and we'll just have to
-	 * re-acquire the trace.
-	 *   Again, this approach is adding non-trace overhead to the kernel's
-	 *   operation, but it's just an extra comparison and two extra
-	 *   assignments on the fork path, which I'm not too concerned about;
-	 *   I'm definitely less concerned about it than the potential impact
-	 *   of taking the lock twice!
-	 * If this doesn't work, I can just take it out and then enable and
-	 * analyze the default trace events for forks instead (maybe this
-	 * is the smarter solution...)
-	 */
-	//write_lock_irq(&tasklist_lock);   // bad idea?!
-	
-	/* CLONE_PARENT re-uses the old parent */
-	if (clone_flags & (CLONE_PARENT|CLONE_THREAD)) {
-		p->real_parent = current->real_parent;
-		p->parent_exec_id = current->parent_exec_id;
-	} else {
-		p->real_parent = current;
-		p->parent_exec_id = current->self_exec_id;
-	}
-	
-	//write_unlock_irq(&tasklist_lock);   // bad idea?!
-#endif
-
-	/* PJH: uh-oh: if we want to do the pid stuff correctly here, we still
-	 * have to run this code block which has side-effects first, and
-	 * not run it again later, so we're still relocating the code...
-	 *   I don't want to mess with this further by e.g. allocating a
-	 *   temporary pid here just for tracing purposes, since I don't
-	 *   know if / how to free it...
-	 */
-#define ALLOC_PID_EARLY
-#ifdef ALLOC_PID_EARLY
-	if (pid != &init_struct_pid) {
-		retval = -ENOMEM;
-		pid = alloc_pid(p->nsproxy->pid_ns);
-		if (!pid)
-			goto bad_fork_cleanup_io;
-	}
-#endif	
-
-	if (pid)
-		trace_pid = pid_nr(pid);
-	else
-		trace_pid = -1;
-	trace_tgid = trace_pid;
-	if (clone_flags & CLONE_THREAD)
-		trace_tgid = current->tgid;
-
-	if (clone_flags & (CLONE_PARENT|CLONE_THREAD)) {
-		trace_real_parent = current->real_parent;
-	} else {
-		trace_real_parent = current;
-	}
+	trace_pid = pid_nr(pid);
+	trace_tgid = clone_flags & CLONE_THREAD ? current->tgid : trace_pid;
+	trace_real_parent =
+		clone_flags & (CLONE_PARENT|CLONE_THREAD) ? current->real_parent :
+		                                            current;
 	
 	retval = copy_mm(clone_flags, p, trace_pid, trace_tgid, trace_real_parent);
 	if (retval)
-		goto bad_fork_cleanup_signal;
-	retval = copy_namespaces(clone_flags, p);
-	if (retval)
-		goto bad_fork_cleanup_mm;
+		goto bad_fork_free_pid;
 	retval = copy_io(clone_flags, p);
 	if (retval)
-		goto bad_fork_cleanup_namespaces;
+		goto bad_fork_cleanup_mm;
 	retval = copy_thread(clone_flags, stack_start, stack_size, p);
 	if (retval)
 		goto bad_fork_cleanup_io;
 
-#ifdef PJH_SETPID_NORMAL
-#ifndef ALLOC_PID_EARLY
-	/* Eureka! When this block of code is executed before the block of
-	 * copy_{mm, namespaces, io, thread} functions, it causes the segfault
-	 * and subsequent NULL pointer dereference when Chromium starts!
-	 *   Seems most likely that this block of code depends on copy_namespaces;
-	 *   if I execute that before this, then would it work ok?
-	 * What the heck is this block of code actually doing??
-	 *
-	 */
-	if (pid != &init_struct_pid) {
-		retval = -ENOMEM;
-		pid = alloc_pid(p->nsproxy->pid_ns);
-		if (!pid)
-			goto bad_fork_cleanup_io;
-	}
-#endif
-
 	p->pid = pid_nr(pid);
 	p->tgid = p->pid;
 	if (clone_flags & CLONE_THREAD)
@@ -1587,7 +1477,6 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * Clear TID on mm_release()?
 	 */
 	p->clear_child_tid = (clone_flags & CLONE_CHILD_CLEARTID) ? child_tidptr : NULL;
-#endif
 
 #ifdef CONFIG_BLOCK
 	p->plug = NULL;
@@ -1644,7 +1533,6 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	/* Need tasklist lock for parent etc handling! */
 	write_lock_irq(&tasklist_lock);
 
-#ifdef PJH_SETPARENTS_NORMAL
 	/* CLONE_PARENT re-uses the old parent */
 	if (clone_flags & (CLONE_PARENT|CLONE_THREAD)) {
 		p->real_parent = current->real_parent;
@@ -1653,7 +1541,6 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		p->real_parent = current;
 		p->parent_exec_id = current->self_exec_id;
 	}
-#endif
 
 	spin_lock(&current->sighand->siglock);
 
@@ -1670,7 +1557,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		spin_unlock(&current->sighand->siglock);
 		write_unlock_irq(&tasklist_lock);
 		retval = -ERESTARTNOINTR;
-		goto bad_fork_free_pid;
+		goto bad_fork_cleanup_io;
 	}
 
 	if (clone_flags & CLONE_THREAD) {
@@ -1715,14 +1602,9 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 
 	return p;
 
-bad_fork_free_pid:
-	if (pid != &init_struct_pid)
-		free_pid(pid);
 bad_fork_cleanup_io:
 	if (p->io_context)
 		exit_io_context(p);
-bad_fork_cleanup_namespaces:
-	exit_task_namespaces(p);
 bad_fork_cleanup_mm:
 	if (p->mm) {
 		/* PJH: ensure that this mmput executes in new task p's context,
@@ -1734,6 +1616,11 @@ bad_fork_cleanup_mm:
 		trace_mmap_printk("copy_process error - called mmput in new "
 				"task p's context, not current context!");
 	}
+bad_fork_free_pid:
+	if (pid != &init_struct_pid)
+		free_pid(pid);
+bad_fork_cleanup_namespaces:
+	exit_task_namespaces(p);
 bad_fork_cleanup_signal:
 	if (!(clone_flags & CLONE_THREAD))
 		free_signal_struct(p->signal);
