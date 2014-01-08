@@ -190,8 +190,7 @@ DEFINE_EVENT(mmap_vma, mmap_vma_flags_remap,
 	TP_ARGS(cur_task, vma, label)
 );
 
-/* New special event for dup_mmap function:
- */
+/* New special event for dup_mmap function: */
 TRACE_EVENT(mmap_vma_alloc_dup_mmap,
 	TP_PROTO(struct vm_area_struct *vma,
 		pid_t trace_pid,
@@ -252,9 +251,9 @@ TRACE_EVENT(mmap_vma_alloc_dup_mmap,
 		//  [stack], [vsyscall]
 	),
 
-	/* See definition of vm_area_struct in include/linux/mm_types.h.
-	 * Imitate printing of a vma entry in fs/proc/task_mmu.c:show_map_vma().
-	 *   00400000-0040c000 r-xp 00000000 fd:01 41038  /bin/cat
+	/* Note: "[dup_mmap]" must be printed exactly like this - must exactly
+	 * match format of other mmap_vma_alloc events, and kernel fn must
+	 * be dup_mmap in order for analysis scripts to work.
 	 */
 	TP_printk("pid=%d tgid=%d ptgid=%d [dup_mmap]: %p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
 		__entry->pid,
