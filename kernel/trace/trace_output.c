@@ -561,9 +561,14 @@ seq_print_userip_objs(const struct userstack_entry *entry, struct trace_seq *s,
 		}
 		if (ret)
 			ret = trace_seq_printf(s, " [%03d] => ", cpu);  //PJH
-			//ret = trace_seq_puts(s, " => ");   //orig
 		if (!ip) {
 			if (ret)
+				/* PJH: I encountered this in a stack trace for the
+				 * "apport" process on verbena while running a Chrome
+				 * trace. I'm not really sure what it means, but apport
+				 * wasn't started by chrome and appears irrelevant, so
+				 * I'll ignore these entries in my analysis.
+				 */
 				ret = trace_seq_puts(s, "??");  //PJH: output "??" if ip == 0
 			if (ret)
 				ret = trace_seq_puts(s, "\n");
