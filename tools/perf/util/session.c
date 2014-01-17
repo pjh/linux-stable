@@ -738,23 +738,34 @@ static void stack_user__printf(struct stack_dump *dump)
 	       dump->size, dump->offset);
 }
 
-static void perf_session__print_tstamp(struct perf_session *session,
+static void perf_session__print_tstamp_evsel(struct perf_evsel *evsel,
 				       union perf_event *event,
 				       struct perf_sample *sample)
 {
-	u64 sample_type = perf_evlist__sample_type(session->evlist);
+	u64 sample_type = evsel->attr.sample_type;
 
 	if (event->header.type != PERF_RECORD_SAMPLE &&
-	    !perf_evlist__sample_id_all(session->evlist)) {
+	    !evsel->attr.sample_id_all) {
 		fputs("-1 -1 ", stdout);
 		return;
 	}
 
 	if ((sample_type & PERF_SAMPLE_CPU))
-		printf("%u ", sample->cpu);
+		printf("%u", sample->cpu);
 
 	if (sample_type & PERF_SAMPLE_TIME)
-		printf("%" PRIu64 " ", sample->time);
+		printf(",time=%" PRIu64 " ", sample->time);
+}
+
+static void perf_session__print_tstamp(struct perf_session *session,
+				       union perf_event *event,
+				       struct perf_sample *sample)
+{
+	/* PJH: old call to perf_evlist__sample_type(session->evlist) now
+	 * split across this function and perf_session__print_tstamp_evsel().
+	 */
+	struct perf_evsel *first = perf_evlist__first(session->evlist);
+	perf_session__print_tstamp_evsel(first, event, sample);
 }
 
 static void dump_event(struct perf_session *session, union perf_event *event,
@@ -775,6 +786,28 @@ static void dump_event(struct perf_session *session, union perf_event *event,
 	       event->header.size, perf_event__name(event->header.type));
 }
 
+/* PJH: what's kept in event->sample and what's kept in sample??
+ * event->sample is a struct sample_event, with these members:
+ *     struct perf_event_header        header;
+ *     u64 array[];
+ * Well, that's really helpful. struct perf_sample *sample has a lot
+ * more information:
+ *    u64 ip;
+ *    u32 pid, tid;
+ *    u64 time;
+ *    u64 addr;
+ *    u64 id;
+ *    u64 stream_id;
+ *    u64 period; 
+ *    u32 cpu;
+ *    u32 raw_size;
+ *    void *raw_data;
+ *    struct ip_callchain *callchain;
+ *    struct branch_stack *branch_stack;
+ *    struct regs_dump  user_regs;
+ *    struct stack_dump user_stack;
+ * ...
+ */
 static void dump_sample(struct perf_evsel *evsel, union perf_event *event,
 			struct perf_sample *sample)
 {
@@ -786,6 +819,33 @@ static void dump_sample(struct perf_evsel *evsel, union perf_event *event,
 	printf("(IP, %d): %d/%d: %#" PRIx64 " period: %" PRIu64 " addr: %#" PRIx64 "\n",
 	       event->header.misc, sample->pid, sample->tid, sample->ip,
 	       sample->period, sample->addr);
+	printf("id=%" PRIu64 ",period=%" PRIu64 ",cpu=",
+			sample->id, sample->period);
+	perf_session__print_tstamp_evsel(evsel, event, sample);
+	printf("\n");
+
+	/* PJH: what else is useful in struct perf_sample?
+	 *   id: tells you the id of the trace event!! e.g. 13 samples with id
+	 *     493 and 25 samples with id 494 == 38 total samples for dTLB-loads.
+	 *   raw_data? raw_size seems like it should tell the size of what
+	 *     this void* actually points to, but when I print raw_size
+	 *     here, it's always 0 :(
+	 *   Also, raw_data is always null, and stream_id is always the same.
+	 *   That's it?! What's the damn value of the sample?!
+	 *     Oh, it's in "period" - wtf?
+	 */
+#if 0
+	printf("pjh: sample: id=%" PRIu64 ", stream_id=%" PRIu64 ", raw_size=%d, "
+			"raw_data=%p\n", sample->id, sample->stream_id, sample->raw_size,
+			sample->raw_data);
+	if (sample->raw_size == sizeof(u32)) {
+		printf("pjh: sample: (u32)(*raw_data)=%d\n",
+				*((u32*)(sample->raw_data)));
+	} else if (sample->raw_size == sizeof(u64)) {
+		printf("pjh: sample: (u64)(*raw_data)=%" PRIu64 "\n",
+				*((u64*)(sample->raw_data)));
+	}
+#endif
 
 	sample_type = evsel->attr.sample_type;
 

@@ -987,6 +987,12 @@ static void print_counter_aggr(struct perf_evsel *counter, char *prefix)
 	}
 
 	if (scaled) {
+		/* PJH: if the chosen hardware events had to be multiplexed
+		 * over the hw performance counters during the perf stat run,
+		 * then this code block will be entered, and in [] after the
+		 * counts the percentage of time that each event was active /
+		 * enabled on the counters is printed here.
+		 */
 		double avg_enabled, avg_running;
 
 		avg_enabled = avg_stats(&ps->res_stats[1]);

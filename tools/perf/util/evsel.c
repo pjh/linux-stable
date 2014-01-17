@@ -782,6 +782,8 @@ int __perf_evsel__read(struct perf_evsel *evsel,
 		}
 	} else
 		aggr->ena = aggr->run = 0;
+	printf("pjh: %s: scaled=%d\n", perf_evsel__name(evsel),
+			evsel->counts->scaled);
 
 	return 0;
 }
