@@ -820,11 +820,12 @@ static void dump_sample(struct perf_evsel *evsel, union perf_event *event,
 	       event->header.misc, sample->pid, sample->tid, sample->ip,
 	       sample->period, sample->addr);
 	/* PJH: print out the data that I really care about for my analysis
-	 *   in this line. Prefix with a special character to simplify
-	 *   parsing.
+	 *   in this line (with a printf and also a call to another function
+	 *   that prints the cpu and timestamp). Prefix with a special
+	 *   character to simplify parsing.
 	 */
-	printf("@ id=%" PRIu64 ",period=%" PRIu64 ",cpu=",
-			sample->id, sample->period);
+	printf("@ id=%" PRIu64 ",period=%" PRIu64 ",pid=%d,cpu=",
+			sample->id, sample->period, sample->pid);
 	perf_session__print_tstamp_evsel(evsel, event, sample);
 	printf("\n");
 
