@@ -809,9 +809,12 @@ static void dump_event(struct perf_session *session, union perf_event *event,
  * ...
  */
 static void dump_sample(struct perf_evsel *evsel, union perf_event *event,
-			struct perf_sample *sample)
+			struct perf_sample *sample, struct machine *machine)
 {
 	u64 sample_type;
+	struct thread *thread;
+	struct addr_location al;
+	u8 cpumode = event->header.misc & PERF_RECORD_MISC_CPUMODE_MASK;
 
 	if (!dump_trace)
 		return;
@@ -823,11 +826,27 @@ static void dump_sample(struct perf_evsel *evsel, union perf_event *event,
 	 *   in this line (with a printf and also a call to another function
 	 *   that prints the cpu and timestamp). Prefix with a special
 	 *   character to simplify parsing.
+	 * Later on, in perf_session_deliver_event -> tool->sample
+	 * (process_sample_event) -> perf_event__preprocess_sample, the
+	 * "thread" and "dso" for this sample are also printed. Let's
+	 * add those here too...
 	 */
+	if (machine)
+		thread = machine__findnew_thread(machine, event->ip.pid);
+	else
+		thread = NULL;
 	printf("@ id=%" PRIu64 ",period=%" PRIu64 ",pid=%d,cpu=",
 			sample->id, sample->period, sample->pid);
 	perf_session__print_tstamp_evsel(evsel, event, sample);
-	printf("\n");
+	if (thread) {
+		thread__find_addr_map(thread, machine, cpumode, MAP__FUNCTION,
+				event->ip.ip, &al);
+		printf(",thread=%s,dso=%s\n", thread->comm,
+				al.map ? al.map->dso->long_name :
+				al.level == 'H' ? "<hypervisor>" : "<not-found>");
+	} else {
+		printf(",thread=<not-found>,dso=<not-found>\n");
+	}
 
 	/* PJH: what else is useful in struct perf_sample?
 	 *   id: tells you the id of the trace event!! e.g. 13 samples with id
@@ -922,7 +941,7 @@ static int perf_session_deliver_event(struct perf_session *session,
 
 	switch (event->header.type) {
 	case PERF_RECORD_SAMPLE:
-		dump_sample(evsel, event, sample);
+		dump_sample(evsel, event, sample, machine);
 		if (evsel == NULL) {
 			++session->stats.nr_unknown_id;
 			return 0;
