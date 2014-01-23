@@ -711,8 +711,8 @@ int trace_print_context(struct trace_iterator *iter)
 {
 	struct trace_seq *s = &iter->seq;
 	struct trace_entry *entry = iter->ent;
-	unsigned long long t;
-	unsigned long secs, usec_rem;
+	//unsigned long long t;
+	//unsigned long secs, usec_rem;
 	char comm[TASK_COMM_LEN];
 	int ret;
 
@@ -730,10 +730,19 @@ int trace_print_context(struct trace_iterator *iter)
 	}
 
 	if (iter->iter_flags & TRACE_FILE_TIME_IN_NS) {
-		t = ns2usecs(iter->ts);
-		usec_rem = do_div(t, USEC_PER_SEC);
-		secs = (unsigned long)t;
-		return trace_seq_printf(s, " %5lu.%06lu: ", secs, usec_rem);
+		/* PJH: to match kernel trace timestamps to perf trace
+		 * timestamps, just print the raw nanoseconds value. The
+		 * value in the format string is the *minimum* width of
+		 * the int that will be printed (it will be padded with
+		 * spaces on the left); the ns timestamps I've seen in
+		 * my perf traces are in the '1614113911278676' range,
+		 * which has 16 digits.
+		 */
+		//t = ns2usecs(iter->ts);
+		//usec_rem = do_div(t, USEC_PER_SEC);
+		//secs = (unsigned long)t;
+		//return trace_seq_printf(s, " %5lu.%06lu: ", secs, usec_rem);
+		return trace_seq_printf(s, " %17llu: ", iter->ts);
 	} else
 		return trace_seq_printf(s, " %12llu: ", iter->ts);
 }
