@@ -972,12 +972,16 @@ access_error(unsigned long error_code, struct vm_area_struct *vma)
 	}
 
 	/* read, present: */
-	if (unlikely(error_code & PF_PROT))
+	if (unlikely(error_code & PF_PROT)) {
+		//PFTRACE
 		return 1;
+	}
 
 	/* read, not present: */
-	if (unlikely(!(vma->vm_flags & (VM_READ | VM_EXEC | VM_WRITE))))
+	if (unlikely(!(vma->vm_flags & (VM_READ | VM_EXEC | VM_WRITE)))) {
+		//PFTRACE
 		return 1;
+	}
 
 	return 0;
 }
@@ -1046,6 +1050,7 @@ __do_page_fault(struct pt_regs *regs, unsigned long error_code)
 	 * protection error (error_code & 9) == 0.
 	 */
 	if (unlikely(fault_in_kernel_space(address))) {
+		// PFTRACE - kernel page fault
 		if (!(error_code & (PF_RSVD | PF_USER | PF_PROT))) {
 			if (vmalloc_fault(address) >= 0)
 				return;
@@ -1186,6 +1191,9 @@ good_area:
 	 * the fault:
 	 */
 	fault = handle_mm_fault(mm, vma, address, flags);
+	  /* PJH: note that even in successful cases, fault will have
+	   * flags set, such as VM_FAULT_LOCKED, VM_FAULT_MAJOR,
+	   */
 
 	if (unlikely(fault & (VM_FAULT_RETRY|VM_FAULT_ERROR))) {
 		if (mm_fault_error(regs, error_code, address, fault))
@@ -1202,10 +1210,12 @@ good_area:
 			tsk->maj_flt++;
 			perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS_MAJ, 1,
 				      regs, address);
+			//PFTRACE ?
 		} else {
 			tsk->min_flt++;
 			perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS_MIN, 1,
 				      regs, address);
+			//PFTRACE ?
 		}
 		if (fault & VM_FAULT_RETRY) {
 			/* Clear FAULT_FLAG_ALLOW_RETRY to avoid any risk

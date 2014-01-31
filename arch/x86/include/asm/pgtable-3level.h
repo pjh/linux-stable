@@ -26,6 +26,7 @@
  */
 static inline void native_set_pte(pte_t *ptep, pte_t pte)
 {
+	//PJHTRACE
 	ptep->pte_high = pte.pte_high;
 	smp_wmb();
 	ptep->pte_low = pte.pte_low;
@@ -87,16 +88,19 @@ static inline pmd_t pmd_read_atomic(pmd_t *pmdp)
 
 static inline void native_set_pte_atomic(pte_t *ptep, pte_t pte)
 {
+	//PJHTRACE
 	set_64bit((unsigned long long *)(ptep), native_pte_val(pte));
 }
 
 static inline void native_set_pmd(pmd_t *pmdp, pmd_t pmd)
 {
+	//PJHTRACE
 	set_64bit((unsigned long long *)(pmdp), native_pmd_val(pmd));
 }
 
 static inline void native_set_pud(pud_t *pudp, pud_t pud)
 {
+	//PJHTRACE
 	set_64bit((unsigned long long *)(pudp), native_pud_val(pud));
 }
 

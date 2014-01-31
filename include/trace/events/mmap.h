@@ -123,7 +123,7 @@ DECLARE_EVENT_CLASS(mmap_vma,
 		__entry->dev_minor,
 		__entry->inode,
 		__entry->filename
-		)
+	)
 );
 
 /* Define a trace event function "trace_mmap_vma_alloc()", which has

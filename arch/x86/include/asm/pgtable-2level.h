@@ -13,11 +13,13 @@
  */
 static inline void native_set_pte(pte_t *ptep , pte_t pte)
 {
+	//PJHTRACE
 	*ptep = pte;
 }
 
 static inline void native_set_pmd(pmd_t *pmdp, pmd_t pmd)
 {
+	//PJHTRACE
 	*pmdp = pmd;
 }
 

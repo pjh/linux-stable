@@ -295,6 +295,11 @@ static inline pteval_t pte_flags(pte_t pte)
 	return native_pte_val(pte) & PTE_FLAGS_MASK;
 }
 
+static inline pteval_t pteval_flags(pteval_t pteval)
+{
+	return pteval & PTE_FLAGS_MASK;
+}
+
 #define pgprot_val(x)	((x).pgprot)
 #define __pgprot(x)	((pgprot_t) { (x) } )
 

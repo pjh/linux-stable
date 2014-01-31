@@ -137,6 +137,11 @@ static inline unsigned long pte_pfn(pte_t pte)
 	return (pte_val(pte) & PTE_PFN_MASK) >> PAGE_SHIFT;
 }
 
+static inline unsigned long pteval_pfn(pteval_t pteval)
+{
+	return (pteval & PTE_PFN_MASK) >> PAGE_SHIFT;
+}
+
 static inline unsigned long pmd_pfn(pmd_t pmd)
 {
 	return (pmd_val(pmd) & PTE_PFN_MASK) >> PAGE_SHIFT;
@@ -291,6 +296,7 @@ static inline pmd_t pmd_mkwrite(pmd_t pmd)
 
 static inline pmd_t pmd_mknotpresent(pmd_t pmd)
 {
+	//PJHTRACE?
 	return pmd_clear_flags(pmd, _PAGE_PRESENT);
 }
 
@@ -645,6 +651,7 @@ static inline pmd_t native_local_pmdp_get_and_clear(pmd_t *pmdp)
 static inline void native_set_pte_at(struct mm_struct *mm, unsigned long addr,
 				     pte_t *ptep , pte_t pte)
 {
+	//PFTRACE ? Not here, want to emit trace events wherever this is *called*.
 	native_set_pte(ptep, pte);
 }
 

@@ -787,6 +787,9 @@ int do_huge_pmd_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	unsigned long haddr = address & HPAGE_PMD_MASK;
 	pte_t *pte;
 
+	//PFTRACE: TODO: somewhere in this function (called from
+	// handle_mm_fault()).
+
 	if (haddr >= vma->vm_start && haddr + HPAGE_PMD_SIZE <= vma->vm_end) {
 		if (unlikely(anon_vma_prepare(vma)))
 			return VM_FAULT_OOM;
@@ -1137,6 +1140,9 @@ int do_huge_pmd_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	unsigned long mmun_start;	/* For mmu_notifiers */
 	unsigned long mmun_end;		/* For mmu_notifiers */
 
+	//PFTRACE: TODO: somewhere in this function (called from
+	// handle_mm_fault()).
+
 	VM_BUG_ON(!vma->anon_vma);
 	haddr = address & HPAGE_PMD_MASK;
 	if (is_huge_zero_pmd(orig_pmd))
@@ -1295,6 +1301,9 @@ int do_huge_pmd_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	int target_nid;
 	int current_nid = -1;
 	bool migrated;
+
+	//PFTRACE: TODO: somewhere in this function (called from
+	// handle_mm_fault()).
 
 	spin_lock(&mm->page_table_lock);
 	if (unlikely(!pmd_same(pmd, *pmdp)))

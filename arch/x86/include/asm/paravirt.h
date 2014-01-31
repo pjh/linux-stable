@@ -511,6 +511,7 @@ static inline void ptep_modify_prot_commit(struct mm_struct *mm, unsigned long a
 
 static inline void set_pte(pte_t *ptep, pte_t pte)
 {
+	//PJHTRACE
 	if (sizeof(pteval_t) > sizeof(long))
 		PVOP_VCALL3(pv_mmu_ops.set_pte, ptep,
 			    pte.pte, (u64)pte.pte >> 32);
@@ -543,6 +544,7 @@ static inline void set_pmd_at(struct mm_struct *mm, unsigned long addr,
 static inline void set_pmd(pmd_t *pmdp, pmd_t pmd)
 {
 	pmdval_t val = native_pmd_val(pmd);
+	//PJHTRACE
 
 	if (sizeof(pmdval_t) > sizeof(long))
 		PVOP_VCALL3(pv_mmu_ops.set_pmd, pmdp, val, (u64)val >> 32);
@@ -582,6 +584,7 @@ static inline pmdval_t pmd_val(pmd_t pmd)
 static inline void set_pud(pud_t *pudp, pud_t pud)
 {
 	pudval_t val = native_pud_val(pud);
+	//PJHTRACE
 
 	if (sizeof(pudval_t) > sizeof(long))
 		PVOP_VCALL3(pv_mmu_ops.set_pud, pudp,
@@ -622,6 +625,7 @@ static inline pudval_t pud_val(pud_t pud)
 static inline void set_pgd(pgd_t *pgdp, pgd_t pgd)
 {
 	pgdval_t val = native_pgd_val(pgd);
+	//PJHTRACE!
 
 	if (sizeof(pgdval_t) > sizeof(long))
 		PVOP_VCALL3(pv_mmu_ops.set_pgd, pgdp,
@@ -650,6 +654,7 @@ static inline void pud_clear(pud_t *pudp)
    64-bit pte atomically */
 static inline void set_pte_atomic(pte_t *ptep, pte_t pte)
 {
+	//PJHTRACE
 	PVOP_VCALL3(pv_mmu_ops.set_pte_atomic, ptep,
 		    pte.pte, pte.pte >> 32);
 }

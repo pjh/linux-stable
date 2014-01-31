@@ -376,6 +376,7 @@ static pteval_t pte_mfn_to_pfn(pteval_t val)
 			val = ((pteval_t)pfn << PAGE_SHIFT) | flags;
 	}
 
+	//PJHTRACE ??
 	return val;
 }
 
@@ -1751,6 +1752,7 @@ static void *m2v(phys_addr_t maddr)
 static void set_page_prot_flags(void *addr, pgprot_t prot, unsigned long flags)
 {
 	unsigned long pfn = __pa(addr) >> PAGE_SHIFT;
+	//PJHTRACE ??
 	pte_t pte = pfn_pte(pfn, prot);
 
 	if (HYPERVISOR_update_va_mapping((unsigned long)addr, pte, flags))

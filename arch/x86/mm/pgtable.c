@@ -23,10 +23,14 @@ pte_t *pte_alloc_one_kernel(struct mm_struct *mm, unsigned long address)
 pgtable_t pte_alloc_one(struct mm_struct *mm, unsigned long address)
 {
 	struct page *pte;
+	  /* This is not actually a pte, but a page of physical memory that
+	   * will contain 512 4th-level PTEs.
+	   */
 
 	pte = alloc_pages(__userpte_alloc_gfp, 0);
-	if (pte)
+	if (pte) {
 		pgtable_page_ctor(pte);
+	}
 	return pte;
 }
 

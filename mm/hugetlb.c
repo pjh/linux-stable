@@ -2817,6 +2817,9 @@ int hugetlb_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	static DEFINE_MUTEX(hugetlb_instantiation_mutex);
 	struct hstate *h = hstate_vma(vma);
 
+	//PFTRACE: TODO: somewhere in this function (called from
+	// handle_mm_fault()).
+
 	address &= huge_page_mask(h);
 
 	ptep = huge_pte_offset(mm, address);
