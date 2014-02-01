@@ -651,7 +651,7 @@ static inline pmd_t native_local_pmdp_get_and_clear(pmd_t *pmdp)
 static inline void native_set_pte_at(struct mm_struct *mm, unsigned long addr,
 				     pte_t *ptep , pte_t pte)
 {
-	//PFTRACE ? Not here, want to emit trace events wherever this is *called*.
+	//pftrace? Not here, want to emit trace events wherever this is *called*.
 	native_set_pte(ptep, pte);
 }
 

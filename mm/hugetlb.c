@@ -32,6 +32,9 @@
 #include <linux/node.h>
 #include "internal.h"
 
+//#define CREATE_TRACE_POINTS
+#include <trace/events/pte.h>
+
 const unsigned long hugetlb_zero = 0, hugetlb_infinity = ~0UL;
 static gfp_t htlb_alloc_mask = GFP_HIGHUSER;
 unsigned long hugepages_treat_as_movable;
@@ -2817,8 +2820,9 @@ int hugetlb_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	static DEFINE_MUTEX(hugetlb_instantiation_mutex);
 	struct hstate *h = hstate_vma(vma);
 
-	//PFTRACE: TODO: somewhere in this function (called from
+	//pftrace: TODO: somewhere in this function (called from
 	// handle_mm_fault()).
+	trace_pte_printk("hugetlb_fault", 0);
 
 	address &= huge_page_mask(h);
 

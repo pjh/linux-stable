@@ -20,6 +20,9 @@
 #include <asm/fixmap.h>			/* VSYSCALL_START		*/
 #include <asm/context_tracking.h>	/* exception_enter(), ...	*/
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/pte.h>
+
 /*
  * Page fault error code bits:
  *
@@ -966,21 +969,23 @@ access_error(unsigned long error_code, struct vm_area_struct *vma)
 {
 	if (error_code & PF_WRITE) {
 		/* write, present and write, not present: */
-		if (unlikely(!(vma->vm_flags & VM_WRITE)))
+		if (unlikely(!(vma->vm_flags & VM_WRITE))) {
+			//pftrace: in caller (return distinct code)
 			return 1;
+		}
 		return 0;
 	}
 
 	/* read, present: */
 	if (unlikely(error_code & PF_PROT)) {
-		//PFTRACE
-		return 1;
+		//pftrace: in caller (return distinct code)
+		return 2;
 	}
 
 	/* read, not present: */
 	if (unlikely(!(vma->vm_flags & (VM_READ | VM_EXEC | VM_WRITE)))) {
-		//PFTRACE
-		return 1;
+		//pftrace: in caller (return distinct code)
+		return 3;
 	}
 
 	return 0;
@@ -1018,6 +1023,7 @@ __do_page_fault(struct pt_regs *regs, unsigned long error_code)
 	int write = error_code & PF_WRITE;
 	unsigned int flags = FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_KILLABLE |
 					(write ? FAULT_FLAG_WRITE : 0);
+	int access_error_code = 0;
 
 	tsk = current;
 	mm = tsk->mm;
@@ -1050,27 +1056,41 @@ __do_page_fault(struct pt_regs *regs, unsigned long error_code)
 	 * protection error (error_code & 9) == 0.
 	 */
 	if (unlikely(fault_in_kernel_space(address))) {
-		// PFTRACE - kernel page fault
 		if (!(error_code & (PF_RSVD | PF_USER | PF_PROT))) {
-			if (vmalloc_fault(address) >= 0)
+			if (vmalloc_fault(address) >= 0) {
+				trace_pte_fault("__do_page_fault", "kernel page fault",
+					address, 1);
 				return;
+			}
 
-			if (kmemcheck_fault(regs, address, error_code))
+			if (kmemcheck_fault(regs, address, error_code)) {
+				trace_pte_fault("__do_page_fault", "kernel page fault",
+					address, 2);
 				return;
+			}
 		}
 
 		/* Can handle a stale RO->RW TLB: */
-		if (spurious_fault(error_code, address))
+		if (spurious_fault(error_code, address)) {
+			trace_pte_fault("__do_page_fault", "kernel page fault",
+				address, 3);
 			return;
+		}
 
 		/* kprobes don't want to hook the spurious faults: */
-		if (notify_page_fault(regs))
+		if (notify_page_fault(regs)) {
+			trace_pte_fault("__do_page_fault", "kernel page fault",
+				address, 4);
 			return;
+		}
+
 		/*
 		 * Don't take the mm semaphore here. If we fixup a prefetch
 		 * fault we could otherwise deadlock:
 		 */
 		bad_area_nosemaphore(regs, error_code, address);
+		trace_pte_fault("__do_page_fault", "kernel page fault",
+			address, 5);
 
 		return;
 	}
@@ -1180,7 +1200,10 @@ retry:
 	 * we can handle it..
 	 */
 good_area:
-	if (unlikely(access_error(error_code, vma))) {
+	access_error_code = access_error(error_code, vma);
+	if (unlikely(access_error_code)) {
+		trace_pte_fault("__do_page_fault", "protection fault",
+				address, access_error_code);
 		bad_area_access_error(regs, error_code, address);
 		return;
 	}
@@ -1192,7 +1215,7 @@ good_area:
 	 */
 	fault = handle_mm_fault(mm, vma, address, flags);
 	  /* PJH: note that even in successful cases, fault will have
-	   * flags set, such as VM_FAULT_LOCKED, VM_FAULT_MAJOR,
+	   * flags set, such as VM_FAULT_LOCKED, VM_FAULT_MAJOR, ...
 	   */
 
 	if (unlikely(fault & (VM_FAULT_RETRY|VM_FAULT_ERROR))) {
@@ -1210,12 +1233,10 @@ good_area:
 			tsk->maj_flt++;
 			perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS_MAJ, 1,
 				      regs, address);
-			//PFTRACE ?
 		} else {
 			tsk->min_flt++;
 			perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS_MIN, 1,
 				      regs, address);
-			//PFTRACE ?
 		}
 		if (fault & VM_FAULT_RETRY) {
 			/* Clear FAULT_FLAG_ALLOW_RETRY to avoid any risk

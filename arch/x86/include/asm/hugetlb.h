@@ -39,7 +39,7 @@ static inline void hugetlb_free_pgd_range(struct mmu_gather *tlb,
 static inline void set_huge_pte_at(struct mm_struct *mm, unsigned long addr,
 				   pte_t *ptep, pte_t pte)
 {
-	//PFTRACE...
+	//pftrace? Not here, want to emit trace events wherever this is *called*.
 	set_pte_at(mm, addr, ptep, pte);
 }
 

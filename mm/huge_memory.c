@@ -26,6 +26,9 @@
 #include <asm/pgalloc.h>
 #include "internal.h"
 
+//#define CREATE_TRACE_POINTS
+#include <trace/events/pte.h>
+
 /*
  * By default transparent hugepage support is enabled for all mappings
  * and khugepaged scans all mappings. Defrag is only invoked by
@@ -787,8 +790,9 @@ int do_huge_pmd_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	unsigned long haddr = address & HPAGE_PMD_MASK;
 	pte_t *pte;
 
-	//PFTRACE: TODO: somewhere in this function (called from
+	//pftrace: TODO: somewhere in this function (called from
 	// handle_mm_fault()).
+	trace_pte_printk("do_huge_pmd_anonymous_page", 0);
 
 	if (haddr >= vma->vm_start && haddr + HPAGE_PMD_SIZE <= vma->vm_end) {
 		if (unlikely(anon_vma_prepare(vma)))
@@ -1140,8 +1144,9 @@ int do_huge_pmd_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	unsigned long mmun_start;	/* For mmu_notifiers */
 	unsigned long mmun_end;		/* For mmu_notifiers */
 
-	//PFTRACE: TODO: somewhere in this function (called from
+	//pftrace: TODO: somewhere in this function (called from
 	// handle_mm_fault()).
+	trace_pte_printk("do_huge_pmd_wp_page", 0);
 
 	VM_BUG_ON(!vma->anon_vma);
 	haddr = address & HPAGE_PMD_MASK;
@@ -1302,8 +1307,9 @@ int do_huge_pmd_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	int current_nid = -1;
 	bool migrated;
 
-	//PFTRACE: TODO: somewhere in this function (called from
+	//pftrace: TODO: somewhere in this function (called from
 	// handle_mm_fault()).
+	trace_pte_printk("do_huge_pmd_numa_page", 0);
 
 	spin_lock(&mm->page_table_lock);
 	if (unlikely(!pmd_same(pmd, *pmdp)))

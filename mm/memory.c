@@ -2626,10 +2626,11 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	unsigned long mmun_start = 0;	/* For mmu_notifiers */
 	unsigned long mmun_end = 0;	/* For mmu_notifiers */
 
-	/* PFTRACE - still TODO somewhere in this function (called from
-	 * handle_pte_fault() for COW page that was already present in
-	 * memory, OR called from do_swap_page() after a *shared* swap
-	 * page was swapped in).
+	/* pftrace: this function is called from handle_pte_fault() for
+	 * a typical write to a write-protected COW page that was already
+	 * present in memory, OR called from do_swap_page() after a
+	 * *shared* swap page was mapped in to this process' address 
+	 * space from the swap cache.
 	 *   In the latter case, we want to emit two events: one for the
 	 *   swap-in earlier, and one for the COW here.
 	 */
@@ -2674,7 +2675,7 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 			 */
 			page_move_anon_rmap(old_page, vma, address);
 			unlock_page(old_page);
-			/* PFTRACE here? COW was marked, was NOT used, and is now
+			/* pftrace here? COW was marked, was NOT used, and is now
 			 * un-marked?
 			 *   Emit a message later, after the reuse label
 			 */
@@ -2758,11 +2759,13 @@ reuse:
 		pte_unmap_unlock(page_table, ptl);
 		ret |= VM_FAULT_WRITE;
 
-		/* PFTRACE here: this page was write-protected ("marked" as COW),
+		/* pftrace: this page was write-protected ("marked" as COW),
 		 * but COW was not actually performed, and now the page is no
 		 * longer write-protected (due to maybe_mkwrite() call above).
-		 * Emit an informational trace event here for this!
+		 * When we just change some flags on a pte, use trace_pte_update().
 		 */
+		trace_pte_update(current, vma, address, 0, orig_pte, entry,
+				"do_wp_page nocopy");
 
 		if (!dirty_page)
 			return ret;
@@ -2822,6 +2825,12 @@ gotten:
 		cow_user_page(new_page, old_page, address, vma);
 	}
 	__SetPageUptodate(new_page);
+	/* pftrace: do we count the allocation of a new zero page as COW
+	 *   too? Yes.
+	 */
+	trace_pte_cow(current, vma, address, 0, orig_pte,
+			mk_pte(new_page, vma->vm_page_prot),
+			"do_wp_page");
 
 	if (mem_cgroup_newpage_charge(new_page, mm, GFP_KERNEL))
 		goto oom_free_new;
@@ -2859,9 +2868,13 @@ gotten:
 		 * new page to be mapped directly into the secondary page table.
 		 */
 		set_pte_at_notify(mm, address, page_table, entry);
-		/* PFTRACE here!! We just set our new PTE to point to the new_page
-		 * that we definitely just allocated above.
+
+		/* pftrace here! We just set our new PTE to point to the new_page
+		 * that we definitely just allocated above. Set is_major to 0:
+		 * we had to allocate a page, but we didn't have to go to disk.
 		 */
+		trace_pte_mapped(current, vma, address, 0, orig_pte, entry,
+				"do_wp_page");
 
 		update_mmu_cache(vma, address, page_table);
 		if (old_page) {
@@ -3078,7 +3091,7 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		count_vm_event(PGMAJFAULT);
 		mem_cgroup_count_vm_event(mm, PGMAJFAULT);
 
-		/* PFTRACE here? No - do it below, after pte_t pte is set up.
+		/* pftrace here? No - do it below, after pte_t pte is set up.
 		 */
 	} else if (PageHWPoison(page)) {
 		/*
@@ -3090,7 +3103,7 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		swapcache = page;
 		goto out_release;
 	} else {
-		/* PFTRACE here? This page fault was actually minor, physical
+		/* pftrace here? This page fault was actually minor, physical
 		 * page was found in swap cache, meaning it wasn't mapped into
 		 * the faulting process' address space but it was already in
 		 * physical memory (i.e. mapped into some other process' address
@@ -3110,10 +3123,13 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		 *   then these two events might need to be interpreted
 		 *   differently...
 		 *
-		 * For now, just emit a single "real" PFTRACE event below, but
-		 * add an "informational" event here.
+		 * For now, just emit a single "real" pftrace event below, but
+		 * add an "informational" event here. If VM_SHARED is set (the
+		 * trace "code" will be nonzero), then this anonymous page is
+		 * also mapped into some other process' address space?
 		 */
-		;
+		trace_pte_fault("do_swap_page", "minor swap event!", address,
+				vma->vm_flags & VM_SHARED);
 	}
 
 	swapcache = page;
@@ -3184,7 +3200,7 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	flush_icache_page(vma, page);
 	set_pte_at(mm, address, page_table, pte);
 
-	/* PFTRACE here: we've successfully swapped in an anonymous page
+	/* pftrace here: we've successfully swapped in an anonymous page
 	 * and set the process' pte to point at it. If this turned out
 	 * to be a minor fault (we got page from the swap_cache), then
 	 * ret will not have the VM_FAULT_MAJOR flag set. If we had to
@@ -3287,7 +3303,7 @@ static inline int check_stack_guard_page(struct vm_area_struct *vma, unsigned lo
  */
 static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		unsigned long address, pte_t *page_table, pmd_t *pmd,
-		unsigned int flags)
+		unsigned int flags, pte_t orig_pte)
 {
 	struct page *page;
 	spinlock_t *ptl;
@@ -3333,13 +3349,13 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	inc_mm_counter_fast(mm, MM_ANONPAGES);
 	page_add_new_anon_rmap(page, vma, address);
 setpte:
-	//PFTRACE - at this point we have both the vma and the new page table
-	// entry (inside of set_pte_at() we won't have the vma). We have all
-	// of these values available right here: vma, address of pte
-	// (page_table), new value of pte (entry), and old value of pte
-	// (well, we can get it up above, as *page_table... right?). We also
-	// know that the page fault was handled successfully.
 	set_pte_at(mm, address, page_table, entry);
+
+	/* pftrace: we just mapped a newly-allocated page into our page table.
+	 * This is not a major fault since we didn't have to access the disk.
+	 */
+	trace_pte_mapped(current, vma, address, 0, orig_pte, entry,
+			"do_anonymous_page");
 
 	/* No need to invalidate - it was non-present before */
 	update_mmu_cache(vma, address, page_table);
@@ -3384,8 +3400,9 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	int ret;
 	int page_mkwrite = 0;
 
-	//PFTRACE - still TODO somewhere in this function (called from
-	// handle_pte_fault() -> do_[linear,nonlinear]_fault()).
+	/* pftrace: this function is called from two places: handle_pte_fault() ->
+	 * do_[linear,nonlinear]_fault()). We emit a single trace event below.
+	 */
 
 	/*
 	 * If we do COW later, allocate page befor taking lock_page()
@@ -3418,6 +3435,11 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	 * "typical" return value is just VM_FAULT_LOCKED; if the page
 	 * was found in the page cache then VM_FAULT_MAJOR will NOT be
 	 * set, otherwise it will be set.
+	 *
+	 * What does ->fault() do? In the typical case, I think it searches
+	 * for the page in the page cache first and if it's found, sets
+	 * vmf.page to point to it; if the page is not in the page cache,
+	 * it is brought in, and then vmf.page is set to point to it.
 	 */
 	ret = vma->vm_ops->fault(vma, &vmf);
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE |
@@ -3450,6 +3472,11 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 			anon = 1;
 			copy_user_highpage(page, vmf.page, address, vma);
 			__SetPageUptodate(page);
+			/* pftrace: sneaky COW here!
+			 */
+			trace_pte_cow(current, vma, address, 0, orig_pte,
+					mk_pte(page, vma->vm_page_prot),
+					"__do_fault");
 		} else {
 			/*
 			 * If the page will be shareable, see if the backing
@@ -3512,12 +3539,24 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 			}
 		}
 		set_pte_at(mm, address, page_table, entry);
-		/* PFTRACE here: we've successfully mapped in a file-backed page.
-		 * The page is definitely locked into the page cache now - it
-		 * may have already been there (in which case this was actually
-		 * a minor fault), or we may have just brought it in. To tell
-		 * the difference, check ret & VM_FAULT_MAJOR.
+		
+		/* pftrace here: we've successfully mapped in a file-backed page.
+		 * In the typical case, the page is definitely locked into the
+		 * page cache now - it may have already been there (in which case
+		 * this was actually a minor fault), or we may have just brought
+		 * it in. To tell the difference, check ret & VM_FAULT_MAJOR.
+		 * HOWEVER, we also may have done a COW above, in which case
+		 * we just allocated a brand new page and mapped it into our
+		 * page table, but it is now private (and considered anonymous)
+		 * and not kept in the page cache.
+		 *   In any of these cases, the trace_pte_mapped() should be
+		 *   interpreted as a page that is now "resident" for *this*
+		 *   process (whereas previously the page was perhaps present
+		 *   in physical memory or not, but not accessible from this
+		 *   process' page table).
 		 */
+		trace_pte_mapped(current, vma, address, ret & VM_FAULT_MAJOR,
+				orig_pte, entry, "__do_fault");
 
 		/* no need to invalidate: a not-present page won't be cached */
 		update_mmu_cache(vma, address, page_table);
@@ -3635,8 +3674,10 @@ int do_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	int target_nid;
 	bool migrated = false;
 
-	//PFTRACE - still TODO somewhere in this function (called from
-	// handle_pte_fault()).
+	/* pftrace - still TODO somewhere in this function (called from
+	 * handle_pte_fault()).
+	 */
+	trace_pte_printk("do_numa_page", 0);
 
 	/*
 	* The "pte" at this point cannot be used safely without
@@ -3701,8 +3742,9 @@ static int do_pmd_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	bool numa = false;
 	int local_nid = numa_node_id();
 
-	//PFTRACE: TODO: somewhere in this function (called from
+	//pftrace: TODO: somewhere in this function (called from
 	// handle_mm_fault()).
+	trace_pte_printk("do_pmd_numa_page", 0);
 
 	spin_lock(&mm->page_table_lock);
 	pmd = *pmdp;
@@ -3802,9 +3844,10 @@ int handle_pte_fault(struct mm_struct *mm,
 		     pte_t *pte, pmd_t *pmd, unsigned int flags)
 {
 	pte_t entry;
+	pte_t orig_entry = entry;
 	spinlock_t *ptl;
 
-	//PFTRACE: not here in this function, but down inside of each
+	//pftrace: not here in this function, but down inside of each
 	// of its branches, ideally where we know that the execution was
 	// successful.
 
@@ -3851,7 +3894,7 @@ int handle_pte_fault(struct mm_struct *mm,
 			/* PJH: anonymous vma.
 			 */
 			return do_anonymous_page(mm, vma, address,
-						 pte, pmd, flags);
+						 pte, pmd, flags, entry);
 		}
 		if (pte_file(entry)) {
 			/* PJH: non-linear file-backed vma - see comments above.
@@ -3898,7 +3941,8 @@ int handle_pte_fault(struct mm_struct *mm,
 	 * protection fault, but now we know (because no other case above
 	 * was a match?)
 	 *   Anyway, I don't see any pte *mapping* changes in the code
-	 *   below, so no need to PFTRACE below.
+	 *   below, so no need to trace_pte_mapped() below... but we
+	 *   can emit a trace_pte_update().
 	 */
 
 	entry = pte_mkyoung(entry);
@@ -3914,6 +3958,8 @@ int handle_pte_fault(struct mm_struct *mm,
 		if (flags & FAULT_FLAG_WRITE)
 			flush_tlb_fix_spurious_fault(vma, address);
 	}
+	trace_pte_update(current, vma, address, 0, orig_entry, entry,
+			"handle_mm_fault?");
 unlock:
 	pte_unmap_unlock(pte, ptl);
 	return 0;
@@ -3987,6 +4033,17 @@ retry:
 					goto retry;
 				return ret;
 			} else {
+				/* PJH: I'm not quite sure what this code path is for -
+				 * if this access caused a page fault, but the page
+				 * wasn't writeable (so we're not doing cow (wp_page())
+				 * above), so why aren't we failing here? Why are we
+				 * setting the page as young / accessed - can't the
+				 * hw do it?
+				 *   Maybe not *all* hardware can do this for transparent
+				 *   huge pages - some software support needed for some
+				 *   architectures?
+				 */
+				trace_pte_printk("calling huge_pmd_set_accessed", 0);
 				huge_pmd_set_accessed(mm, vma, address, pmd,
 						      orig_pmd, dirty);
 			}

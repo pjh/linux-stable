@@ -25,7 +25,7 @@
  *
  * Note that old_pte and new_pte are taken as "pte_t" values, rather than
  * "pte_t *". If old_pte or new_pte is not available, caller can maybe
- * call mk_pte(-1, -1)...
+ * call mk_pte(page, -1) or mk_pte(page, vma->vm_page_prot)...
  *
  * See arch/x86/include/asm/pgtable_types.h and
  * arch/x86/include/asm/pgtable.h for functions to convert between
@@ -117,8 +117,8 @@ DECLARE_EVENT_CLASS(pte_event,
 	TP_printk("pid=%d tgid=%d ptgid=%d [%s]: %p @ %08lx-%08lx %c%c%c%c "
 //			"%08llx %02x:%02x %lu "
 			"%s faultaddr=%p, is_major=%d, "
-			"old_pte_pfn=%lu, old_pte_flags=%08lx, "
-			"new_pte_pfn=%lu, new_pte_flags=%08lx",
+			"old_pte_pfn=%lu, old_pte_flags=%08lX, "
+			"new_pte_pfn=%lu, new_pte_flags=%08lX",
 		__entry->pid,
 		__entry->tgid,
 		__entry->ptgid,
@@ -149,7 +149,16 @@ DECLARE_EVENT_CLASS(pte_event,
  *   pte_mapped(): a new virtual page to physical page mapping has been
  *     established. This trace event should usually be emitted
  *     immediately after a call to set_pte_at() or set_pre_at_notify().
- *   pte_info(): ...
+ *   pte_update(): a page mapping was not changed or established, but some
+ *     part of the PTE changed (e.g. COW was performed). is_major is
+ *     probably not meaningful.
+ *   pte_cow(): a write to a write-protected page occurred, so a new
+ *     page was allocated and the existing page was copied to it. Note
+ *     that the new_pte is probably not completely valid yet; however,
+ *     this trace event should always (as far as I can tell) be followed
+ *     soon by a corresponding pte_mapped() trace event, which will
+ *     have the new_pte set correctly. Also, is_major is not meaningful
+ *     for this event.
  */
 DEFINE_EVENT(pte_event, pte_mapped,  //trace_pte_mapped()
 	TP_PROTO(struct task_struct *cur_task,
@@ -162,7 +171,7 @@ DEFINE_EVENT(pte_event, pte_mapped,  //trace_pte_mapped()
 	TP_ARGS(cur_task, vma, faultaddr, is_major, old_pte, new_pte, label)
 );
 
-DEFINE_EVENT(pte_event, pte_info,   //trace_pte_info()
+DEFINE_EVENT(pte_event, pte_update,   //trace_pte_update()
 	TP_PROTO(struct task_struct *cur_task,
 		struct vm_area_struct *vma,
 		unsigned long faultaddr,
@@ -173,157 +182,63 @@ DEFINE_EVENT(pte_event, pte_info,   //trace_pte_info()
 	TP_ARGS(cur_task, vma, faultaddr, is_major, old_pte, new_pte, label)
 );
 
+DEFINE_EVENT(pte_event, pte_cow,   //trace_pte_cow()
+	TP_PROTO(struct task_struct *cur_task,
+		struct vm_area_struct *vma,
+		unsigned long faultaddr,
+		int is_major,    // ignored for COW
+		pte_t old_pte,
+		pte_t new_pte,   // not always set...
+		const char *label),
+	TP_ARGS(cur_task, vma, faultaddr, is_major, old_pte, new_pte, label)
+);
+
 //DECLARE_EVENT_CLASS(pmd_event, ...);
 
-/* "Standalone" trace event: */
+/* "Standalone" trace events:
+ *   trace_pte_printk(): takes an integer "code", just set to 0 if
+ *     not needed.
+ *   trace_pte_fault(): specifically for *protection faults* and kernel
+ *     faults, where we don't have ptes readily available.
+ *     Useful in some other cases as well: unexpected 
+ */
 TRACE_EVENT(pte_printk,   //trace_pte_printk("");
-	TP_PROTO(const char *msg),
-	TP_ARGS(msg),
+	TP_PROTO(const char *msg, int code),
+	TP_ARGS(msg, code),
 	TP_STRUCT__entry(
 		__array(char, msg, PTETRACE_BUF_LEN)
+		__field(int, code)
 	),
 	TP_fast_assign(
 		strncpy(__entry->msg, msg, PTETRACE_BUF_LEN-1);
 		__entry->msg[PTETRACE_BUF_LEN-1] = '\0';  //defensive
+		__entry->code = code;
 	),
-	TP_printk("%s", __entry->msg)
+	TP_printk("[%s] code=%X", __entry->msg, __entry->code)
 );
 
-#if 0
-/* New special event for dup_pte function: */
-TRACE_EVENT(pte_vma_alloc_dup_pte,
-	TP_PROTO(struct vm_area_struct *vma,
-		pid_t trace_pid,
-		pid_t trace_tgid,
-		struct task_struct *trace_real_parent),
-	TP_ARGS(vma, trace_pid, trace_tgid, trace_real_parent),
+TRACE_EVENT(pte_fault,   //trace_pte_fault();
+	TP_PROTO(const char *label, const char *msg,
+		unsigned long faultaddr, int code),
+	TP_ARGS(label, msg, faultaddr, code),
 	TP_STRUCT__entry(
-		__field(pid_t, pid)
-		__field(pid_t, tgid)
-		__field(pid_t, ptgid)
-		__field(struct vm_area_struct *, vma)
-		__field(unsigned long, vm_start)
-		__field(unsigned long, vm_end)
-		__field(unsigned long, vm_flags)
-		__field(unsigned long long, vm_pgoff)
-		__field(unsigned int, dev_major)
-		__field(unsigned int, dev_minor)
-		__field(unsigned long, inode)
-		__array(char, filename, PTETRACE_BUF_LEN)
+		__array(char, label, PTETRACE_BUF_LEN)
+		__array(char, msg, PTETRACE_BUF_LEN)
+		__field(unsigned long, faultaddr)
+		__field(int, code)
 	),
 	TP_fast_assign(
-		__entry->pid   = trace_pid;
-		__entry->tgid  = trace_tgid;
-		/* Grab parent's tgid: this extra pointer dereference is kind of
-		 * a bummer, but hopefully not much performance impact.
-		 */
-		__entry->ptgid = trace_real_parent ?
-		                 trace_real_parent->tgid : -1;
-		__entry->vma = vma;
-		__entry->vm_start =
-			stack_guard_page_start(vma, vma->vm_start) ?
-				vma->vm_start + PAGE_SIZE :
-				vma->vm_start;
-		__entry->vm_end =
-			stack_guard_page_end(vma, vma->vm_end) ?
-				vma->vm_end - PAGE_SIZE :
-				vma->vm_end;
-		__entry->vm_flags = vma->vm_flags;
-		__entry->vm_pgoff =
-			vma->vm_file ? ((loff_t)(vma->vm_pgoff)) << PAGE_SHIFT : 0;
-		__entry->dev_major =
-			vma->vm_file ? MAJOR(file_inode(vma->vm_file)->i_sb->s_dev) : 0;
-		__entry->dev_minor = 
-			vma->vm_file ? MINOR(file_inode(vma->vm_file)->i_sb->s_dev) : 0;
-		__entry->inode = 
-			vma->vm_file ? file_inode(vma->vm_file)->i_ino : 0;
-		if (vma->vm_file) {
-			char *path = d_path(&(vma->vm_file->f_path),
-				(char *)(__entry->filename), PTETRACE_BUF_LEN);
-			strncpy(__entry->filename, path, PTETRACE_BUF_LEN-1);
-			  // I hope the kernel strncpy works with overlapping strings!
-			  //   Seems to work just fine...
-		} else {
-			__entry->filename[0] = '\0';
-		}
-		__entry->filename[PTETRACE_BUF_LEN-1] = '\0';  //defensive
-		//TODO: add code for special cases of filename: [heap], [vdso],
-		//  [stack], [vsyscall]
+		strncpy(__entry->label, label, PTETRACE_BUF_LEN-1);
+		__entry->label[PTETRACE_BUF_LEN-1] = '\0';  //defensive
+		strncpy(__entry->msg, msg, PTETRACE_BUF_LEN-1);
+		__entry->msg[PTETRACE_BUF_LEN-1] = '\0';  //defensive
+		__entry->faultaddr = faultaddr;
+		__entry->code = code;
 	),
-
-	/* Note: "[dup_page]" must be printed exactly like this - must exactly
-	 * match format of other page_vma_alloc events, and kernel fn must
-	 * be dup_page in order for analysis scripts to work.
-	 */
-	TP_printk("pid=%d tgid=%d ptgid=%d [dup_page]: %p @ %08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s",
-		__entry->pid,
-		__entry->tgid,
-		__entry->ptgid,
-		__entry->vma,
-		__entry->vm_start,
-		__entry->vm_end,
-		__entry->vm_flags & VM_READ ? 'r' : '-',
-		__entry->vm_flags & VM_WRITE ? 'w' : '-',
-		__entry->vm_flags & VM_EXEC ? 'x' : '-',
-		__entry->vm_flags & VM_MAYSHARE ? 's' : 'p',
-		__entry->vm_pgoff,
-		__entry->dev_major,
-		__entry->dev_minor,
-		__entry->inode,
-		__entry->filename
-		)
+	TP_printk("[%s] [%s] faultaddr=%p, code=%X",
+		__entry->label, __entry->msg, (void *)__entry->faultaddr,
+		__entry->code)
 );
-#endif
-
-#if 0
-/* Define a class of trace events, "pte_sim_event", that all take the
- * same args and have the same output. Unlike the pte_event class of
- * events, these events don't take a specific vma as an argument.
- *
- * Note that these events retrieve the current task's parent tgid using
- * the real_parent pointer kept in the task_struct - this pointer should
- * now be set just before a dup_page occurs, and as far as I know that's
- * typically / always the first event that a particular task will emit,
- * so when calling these "sim" events e.g. in shift_arg_pages and
- * load_elf_binary, we're always after the dup_page and the parent tgid
- * should always be retrievable and correct.
- */
-DECLARE_EVENT_CLASS(page_sim_event,
-	TP_PROTO(struct task_struct *cur_task, const char *descr),
-	TP_ARGS(cur_task, descr),
-	TP_STRUCT__entry(
-		__field(pid_t, pid)
-		__field(pid_t, tgid)
-		__field(pid_t, ptgid)
-		__array(char, descr, PTETRACE_BUF_LEN)
-	),
-	TP_fast_assign(
-		__entry->pid   = cur_task->pid;
-		__entry->tgid  = cur_task->tgid;
-		__entry->ptgid = cur_task->real_parent ?
-		                 cur_task->real_parent->tgid : -1;
-		strncpy(__entry->descr, descr, PTETRACE_BUF_LEN-1);
-		__entry->descr[PTETRACE_BUF_LEN-1] = '\0';  //defensive
-	),
-	TP_printk("pid=%d tgid=%d ptgid=%d %s",
-		__entry->pid, __entry->tgid, __entry->ptgid, __entry->descr)
-);
-
-DEFINE_EVENT(page_sim_event, page_disable_sim,   //trace_page_disable_sim()
-	TP_PROTO(struct task_struct *cur_task, const char *descr),
-	TP_ARGS(cur_task, descr)
-);
-
-DEFINE_EVENT(page_sim_event, page_enable_sim,   //trace_page_enable_sim()
-	TP_PROTO(struct task_struct *cur_task, const char *descr),
-	TP_ARGS(cur_task, descr)
-);
-
-DEFINE_EVENT(page_sim_event, page_reset_sim,   //trace_page_reset_sim()
-	TP_PROTO(struct task_struct *cur_task, const char *descr),
-	TP_ARGS(cur_task, descr)
-);
-#endif
 
 #endif /* _TRACE_PTE_H */
 
