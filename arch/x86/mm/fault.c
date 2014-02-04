@@ -20,7 +20,6 @@
 #include <asm/fixmap.h>			/* VSYSCALL_START		*/
 #include <asm/context_tracking.h>	/* exception_enter(), ...	*/
 
-#define CREATE_TRACE_POINTS
 #include <trace/events/pte.h>
 
 /*

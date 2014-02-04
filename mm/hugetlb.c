@@ -32,7 +32,6 @@
 #include <linux/node.h>
 #include "internal.h"
 
-//#define CREATE_TRACE_POINTS
 #include <trace/events/pte.h>
 
 const unsigned long hugetlb_zero = 0, hugetlb_infinity = ~0UL;

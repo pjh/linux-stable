@@ -26,7 +26,6 @@
 #include <asm/pgalloc.h>
 #include "internal.h"
 
-//#define CREATE_TRACE_POINTS
 #include <trace/events/pte.h>
 
 /*

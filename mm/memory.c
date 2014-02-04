@@ -3539,7 +3539,7 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 			}
 		}
 		set_pte_at(mm, address, page_table, entry);
-		
+
 		/* pftrace here: we've successfully mapped in a file-backed page.
 		 * In the typical case, the page is definitely locked into the
 		 * page cache now - it may have already been there (in which case
