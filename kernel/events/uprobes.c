@@ -37,6 +37,7 @@
 #include <linux/percpu-rwsem.h>
 
 #include <linux/uprobes.h>
+#include <trace/events/pte.h>
 
 #define UINSNS_PER_PAGE			(PAGE_SIZE/UPROBE_XOL_SLOT_BYTES)
 #define MAX_UPROBE_XOL_SLOTS		UINSNS_PER_PAGE
@@ -144,6 +145,8 @@ static int __replace_page(struct vm_area_struct *vma, unsigned long addr,
 
 	flush_cache_page(vma, addr, pte_pfn(*ptep));
 	ptep_clear_flush(vma, addr, ptep);
+	trace_pte_at("__replace_page", "set_pte_at_notify", addr,
+			mk_pte(kpage, vma->vm_page_prot));
 	set_pte_at_notify(mm, addr, ptep, mk_pte(kpage, vma->vm_page_prot));
 
 	page_remove_rmap(page);

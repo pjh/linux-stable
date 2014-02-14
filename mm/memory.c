@@ -69,7 +69,6 @@
 
 #include "internal.h"
 
-#define CREATE_TRACE_POINTS
 #include <trace/events/pte.h>
 
 #ifdef LAST_NID_NOT_IN_PAGE_FLAGS
@@ -410,6 +409,73 @@ void pmd_clear_bad(pmd_t *pmd)
 	pmd_ERROR(*pmd);
 	pmd_clear(pmd);
 }
+
+#define MOVE_PGTABLE_H_INLINES_HERE
+#ifdef MOVE_PGTABLE_H_INLINES_HERE
+#ifndef __HAVE_ARCH_PTEP_TEST_AND_CLEAR_YOUNG
+int ptep_test_and_clear_young(struct vm_area_struct *vma,
+					    unsigned long address,
+					    pte_t *ptep)
+{
+	pte_t pte = *ptep;
+	int r = 1;
+	if (!pte_young(pte))
+		r = 0;
+	else {
+		trace_pte_update(current, vma, address, 0, pte,
+				pte_mkold(pte), "ptep_test_and_clear_young");
+		set_pte_at(vma->vm_mm, address, ptep, pte_mkold(pte));
+	}
+	return r;
+}
+#endif  //__HAVE_ARCH_PTEP_TEST_AND_CLEAR_YOUNG
+
+void __ptep_modify_prot_commit(struct mm_struct *mm,
+					     unsigned long addr,
+					     pte_t *ptep, pte_t pte)
+{
+	/*
+	 * The pte is non-present, so there's no hardware state to
+	 * preserve.
+	 */
+	trace_pte_at("__ptep_modify_prot_commit", "set_pte_at",
+			addr, pte);
+	set_pte_at(mm, addr, ptep, pte);
+}
+
+#ifndef __HAVE_ARCH_PMDP_TEST_AND_CLEAR_YOUNG
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+int pmdp_test_and_clear_young(struct vm_area_struct *vma,
+					    unsigned long address,
+					    pmd_t *pmdp)
+{
+	pmd_t pmd = *pmdp;
+	int r = 1;
+	if (!pmd_young(pmd))
+		r = 0;
+	else {
+		trace_pmd_at("pmdp_test_and_clear_young", "set_pmd_at", address,
+				pmd_mkold(pmd));
+		set_pmd_at(vma->vm_mm, address, pmdp, pmd_mkold(pmd));
+	}
+	return r;
+}
+#endif
+#endif
+
+#ifndef __HAVE_ARCH_PMDP_SET_WRPROTECT
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+void pmdp_set_wrprotect(struct mm_struct *mm,
+		unsigned long address, pmd_t *pmdp)
+{
+	pmd_t old_pmd = *pmdp;
+	trace_pmd_at("pmdp_set_wrprotect", "set_pmd_at", address,
+			pmd_wrprotect(old_pmd));
+	set_pmd_at(mm, address, pmdp, pmd_wrprotect(old_pmd));
+}
+#endif
+#endif
+#endif  //MOVE_PGTABLE_H_INLINES_HERE
 
 /*
  * Note: this doesn't free the actual pages themselves. That
@@ -876,6 +942,7 @@ copy_one_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 					 */
 					make_migration_entry_read(&entry);
 					pte = swp_entry_to_pte(entry);
+					trace_pte_at("copy_one_pte", "set_pte_at", addr, pte);
 					set_pte_at(src_mm, addr, src_pte, pte);
 				}
 			}
@@ -911,6 +978,7 @@ copy_one_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	}
 
 out_set_pte:
+	trace_pte_at("copy_one_pte out_set_pte", "set_pte_at", addr, pte);
 	set_pte_at(dst_mm, addr, dst_pte, pte);
 	return 0;
 }
@@ -1155,6 +1223,8 @@ again:
 			if (unlikely(details) && details->nonlinear_vma
 			    && linear_page_index(details->nonlinear_vma,
 						addr) != page->index)
+				trace_pte_at("zap_pte_range", "set_pte_at", addr,
+						pgoff_to_pte(page->index));
 				set_pte_at(mm, addr, pte,
 					   pgoff_to_pte(page->index));
 			if (PageAnon(page))
@@ -2109,6 +2179,7 @@ static int insert_page(struct vm_area_struct *vma, unsigned long addr,
 	get_page(page);
 	inc_mm_counter_fast(mm, MM_FILEPAGES);
 	page_add_file_rmap(page);
+	trace_pte_at("insert_page", "set_pte_at", addr, mk_pte(page, prot));
 	set_pte_at(mm, addr, pte, mk_pte(page, prot));
 
 	retval = 0;
@@ -2181,6 +2252,7 @@ static int insert_pfn(struct vm_area_struct *vma, unsigned long addr,
 
 	/* Ok, finally just insert the thing.. */
 	entry = pte_mkspecial(pfn_pte(pfn, prot));
+	trace_pte_at("insert_pfn", "set_pte_at", addr, entry);
 	set_pte_at(mm, addr, pte, entry);
 	update_mmu_cache(vma, addr, pte); /* XXX: why not for insert_page? */
 
@@ -2279,6 +2351,8 @@ static int remap_pte_range(struct mm_struct *mm, pmd_t *pmd,
 	arch_enter_lazy_mmu_mode();
 	do {
 		BUG_ON(!pte_none(*pte));
+		trace_pte_at("remap_pte_range", "set_pte_at", addr,
+				pte_mkspecial(pfn_pte(pfn, prot)));
 		set_pte_at(mm, addr, pte, pte_mkspecial(pfn_pte(pfn, prot)));
 		pfn++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);
@@ -2763,6 +2837,7 @@ reuse:
 		 * but COW was not actually performed, and now the page is no
 		 * longer write-protected (due to maybe_mkwrite() call above).
 		 * When we just change some flags on a pte, use trace_pte_update().
+		 *   COWTRACE: TODO: emit a special COW message here?
 		 */
 		trace_pte_update(current, vma, address, 0, orig_pte, entry,
 				"do_wp_page nocopy");
@@ -2825,7 +2900,7 @@ gotten:
 		cow_user_page(new_page, old_page, address, vma);
 	}
 	__SetPageUptodate(new_page);
-	/* pftrace: do we count the allocation of a new zero page as COW
+	/* cowtrace: do we count the allocation of a new zero page as COW
 	 *   too? Yes.
 	 */
 	trace_pte_cow(current, vma, address, 0, orig_pte,
@@ -2867,6 +2942,7 @@ gotten:
 		 * mmu page tables (such as kvm shadow page tables), we want the
 		 * new page to be mapped directly into the secondary page table.
 		 */
+		trace_pte_at("__releases", "set_pte_at_notify", address, entry);
 		set_pte_at_notify(mm, address, page_table, entry);
 
 		/* pftrace here! We just set our new PTE to point to the new_page
@@ -3150,6 +3226,11 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	if (unlikely(!PageSwapCache(page) || page_private(page) != entry.val))
 		goto out_page;
 
+	/* PJH: copy-on-write may be performed here! If this page was a ksm
+	 * page and is now being written to (or something), then page will
+	 * be a new page; otherwise, the page that is passed will just be
+	 * directly returned.
+	 */
 	page = ksm_might_need_to_copy(page, vma, address);
 	if (unlikely(!page)) {
 		ret = VM_FAULT_OOM;
@@ -3472,7 +3553,7 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 			anon = 1;
 			copy_user_highpage(page, vmf.page, address, vma);
 			__SetPageUptodate(page);
-			/* pftrace: sneaky COW here!
+			/* cowtrace: sneaky COW here!
 			 */
 			trace_pte_cow(current, vma, address, 0, orig_pte,
 					mk_pte(page, vma->vm_page_prot),
@@ -3696,6 +3777,7 @@ int do_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	}
 
 	pte = pte_mknonnuma(pte);
+	//trace_pte_at("do_numa_page", "set_pte_at", addr, pte);
 	set_pte_at(mm, addr, ptep, pte);
 	update_mmu_cache(vma, addr, ptep);
 
@@ -3749,6 +3831,8 @@ static int do_pmd_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	spin_lock(&mm->page_table_lock);
 	pmd = *pmdp;
 	if (pmd_numa(pmd)) {
+		trace_pmd_at("do_pmd_numa_page", "set_pmd_at", _addr,
+				pmd_mknonnuma(pmd));
 		set_pmd_at(mm, _addr, pmdp, pmd_mknonnuma(pmd));
 		numa = true;
 	}
@@ -3782,6 +3866,7 @@ static int do_pmd_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		}
 		if (pte_numa(pteval)) {
 			pteval = pte_mknonnuma(pteval);
+			//trace_pte_at("do_pmd_numa_page", "set_pte_at", addr, pteval);
 			set_pte_at(mm, addr, pte, pteval);
 		}
 		page = vm_normal_page(vma, addr, pteval);

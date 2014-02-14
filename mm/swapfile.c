@@ -39,6 +39,7 @@
 #include <asm/tlbflush.h>
 #include <linux/swapops.h>
 #include <linux/page_cgroup.h>
+#include <trace/events/pte.h>
 
 static bool swap_count_continued(struct swap_info_struct *, pgoff_t,
 				 unsigned char);
@@ -880,6 +881,11 @@ static int unuse_pte(struct vm_area_struct *vma, pmd_t *pmd,
 	pte_t *pte;
 	int ret = 1;
 
+	/* PJH: I think this is a potential COW occurrence - for now, emit
+	 * an event from ksm_might_need_to_copy(), but eventually, may want
+	 * to emit a more COW-specific message here.
+	 *   COWTRACE
+	 */
 	swapcache = page;
 	page = ksm_might_need_to_copy(page, vma, addr);
 	if (unlikely(!page))
@@ -901,6 +907,9 @@ static int unuse_pte(struct vm_area_struct *vma, pmd_t *pmd,
 	dec_mm_counter(vma->vm_mm, MM_SWAPENTS);
 	inc_mm_counter(vma->vm_mm, MM_ANONPAGES);
 	get_page(page);
+	// this is a clear trace_pte_update() ?
+	trace_pte_at("unuse_pte", "set_pte_at", addr,
+			pte_mkold(mk_pte(page, vma->vm_page_prot)));
 	set_pte_at(vma->vm_mm, addr, pte,
 		   pte_mkold(mk_pte(page, vma->vm_page_prot)));
 	if (page == swapcache)

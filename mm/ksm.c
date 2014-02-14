@@ -39,6 +39,7 @@
 #include <linux/numa.h>
 
 #include <asm/tlbflush.h>
+#include <trace/events/pte.h>
 #include "internal.h"
 
 #ifdef CONFIG_NUMA
@@ -898,12 +899,14 @@ static int write_protect_page(struct vm_area_struct *vma, struct page *page,
 		 * page
 		 */
 		if (page_mapcount(page) + 1 + swapped != page_count(page)) {
+			trace_pte_at("write_protect_page", "set_pte_at", addr, entry);
 			set_pte_at(mm, addr, ptep, entry);
 			goto out_unlock;
 		}
 		if (pte_dirty(entry))
 			set_page_dirty(page);
 		entry = pte_mkclean(pte_wrprotect(entry));
+		trace_pte_at("write_protect_page", "set_pte_at_notify", addr, entry);
 		set_pte_at_notify(mm, addr, ptep, entry);
 	}
 	*orig_pte = *ptep;
@@ -962,6 +965,8 @@ static int replace_page(struct vm_area_struct *vma, struct page *page,
 
 	flush_cache_page(vma, addr, pte_pfn(*ptep));
 	ptep_clear_flush(vma, addr, ptep);
+	trace_pte_at("replace_page", "set_pte_at_notify", addr,
+			mk_pte(kpage, vma->vm_page_prot));
 	set_pte_at_notify(mm, addr, ptep, mk_pte(kpage, vma->vm_page_prot));
 
 	page_remove_rmap(page);
@@ -1886,6 +1891,11 @@ struct page *ksm_might_need_to_copy(struct page *page,
 		SetPageDirty(new_page);
 		__SetPageUptodate(new_page);
 		__set_page_locked(new_page);
+
+		// COWTRACE: TODO: convert this to a better COW-specific trace
+		//   event!
+		trace_pte_fault("ksm_might_need_to_copy", "COW performed",
+				address, 0);
 	}
 
 	return new_page;

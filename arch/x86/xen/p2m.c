@@ -1001,6 +1001,7 @@ int m2p_remove_override(struct page *page,
 
 			xen_mc_issue(PARAVIRT_LAZY_MMU);
 
+			//ptetrace - probably won't ever care about Xen...
 			set_pte_at(&init_mm, address, ptep,
 					pfn_pte(pfn, PAGE_KERNEL));
 			__flush_tlb_single(address);

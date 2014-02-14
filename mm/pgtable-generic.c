@@ -9,6 +9,7 @@
 #include <linux/pagemap.h>
 #include <asm/tlb.h>
 #include <asm-generic/pgtable.h>
+#include <trace/events/pte.h>
 
 #ifndef __HAVE_ARCH_PTEP_SET_ACCESS_FLAGS
 /*
@@ -26,6 +27,8 @@ int ptep_set_access_flags(struct vm_area_struct *vma,
 {
 	int changed = !pte_same(*ptep, entry);
 	if (changed) {
+		trace_pte_update(current, vma, address, 0, *ptep, entry,
+				"ptep_set_access_flags");
 		set_pte_at(vma->vm_mm, address, ptep, entry);
 		flush_tlb_fix_spurious_fault(vma, address);
 	}
@@ -42,6 +45,8 @@ int pmdp_set_access_flags(struct vm_area_struct *vma,
 	int changed = !pmd_same(*pmdp, entry);
 	VM_BUG_ON(address & ~HPAGE_PMD_MASK);
 	if (changed) {
+		trace_pmd_at("pmdp_set_access_flags", "set_pmd_at",
+				address, entry);
 		set_pmd_at(vma->vm_mm, address, pmdp, entry);
 		flush_tlb_range(vma, address, address + HPAGE_PMD_SIZE);
 	}
@@ -115,6 +120,8 @@ void pmdp_splitting_flush(struct vm_area_struct *vma, unsigned long address,
 {
 	pmd_t pmd = pmd_mksplitting(*pmdp);
 	VM_BUG_ON(address & ~HPAGE_PMD_MASK);
+	trace_pmd_at("pmdp_splitting_flush", "set_pmd_at",
+			address, pmd);
 	set_pmd_at(vma->vm_mm, address, pmdp, pmd);
 	/* tlb flush only to serialize against gup-fast */
 	flush_tlb_range(vma, address, address + HPAGE_PMD_SIZE);
@@ -166,6 +173,8 @@ pgtable_t pgtable_trans_huge_withdraw(struct mm_struct *mm)
 void pmdp_invalidate(struct vm_area_struct *vma, unsigned long address,
 		     pmd_t *pmdp)
 {
+	trace_pmd_at("pmdp_invalidate", "set_pmd_at", address,
+			pmd_mknotpresent(*pmdp));
 	set_pmd_at(vma->vm_mm, address, pmdp, pmd_mknotpresent(*pmdp));
 	flush_tlb_range(vma, address, address + HPAGE_PMD_SIZE);
 }

@@ -49,6 +49,7 @@ static int map_pte_fn(pte_t *pte, struct page *pmd_page,
 {
 	unsigned long **frames = (unsigned long **)data;
 
+	//ptetrace - probably won't ever care about Xen...
 	set_pte_at(&init_mm, addr, pte, mfn_pte((*frames)[0], PAGE_KERNEL));
 	(*frames)++;
 	return 0;
@@ -63,6 +64,7 @@ static int map_pte_fn_status(pte_t *pte, struct page *pmd_page,
 {
 	uint64_t **frames = (uint64_t **)data;
 
+	//ptetrace - probably won't ever care about Xen...
 	set_pte_at(&init_mm, addr, pte, mfn_pte((*frames)[0], PAGE_KERNEL));
 	(*frames)++;
 	return 0;
@@ -72,6 +74,7 @@ static int unmap_pte_fn(pte_t *pte, struct page *pmd_page,
 			unsigned long addr, void *data)
 {
 
+	//ptetrace - probably won't ever care about Xen...
 	set_pte_at(&init_mm, addr, pte, __pte(0));
 	return 0;
 }

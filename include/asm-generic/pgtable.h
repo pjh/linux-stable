@@ -1,6 +1,19 @@
 #ifndef _ASM_GENERIC_PGTABLE_H
 #define _ASM_GENERIC_PGTABLE_H
 
+/* PJH: build goes fucking haywire when I include trace/events/pte.h
+ * here; spent over an hour trying to fix it, no real luck, but
+ * suspect that I can't insert trace events inside of inline functions...
+ */
+#define MOVE_INLINES_TO_MEMORY_C
+  // if defined, must define MOVE_PGTABLE_H_INLINES_HERE in mm/memory.c
+
+/* This doesn't work:
+ * #ifdef PJH_TRACE
+ * #include <trace/events/pte.h>
+ * #endif
+ */
+
 #ifndef __ASSEMBLY__
 #ifdef CONFIG_MMU
 
@@ -30,6 +43,11 @@ extern int pmdp_set_access_flags(struct vm_area_struct *vma,
 #endif
 
 #ifndef __HAVE_ARCH_PTEP_TEST_AND_CLEAR_YOUNG
+#ifdef MOVE_INLINES_TO_MEMORY_C
+int ptep_test_and_clear_young(struct vm_area_struct *vma,
+					    unsigned long address,
+					    pte_t *ptep);
+#else
 static inline int ptep_test_and_clear_young(struct vm_area_struct *vma,
 					    unsigned long address,
 					    pte_t *ptep)
@@ -38,14 +56,25 @@ static inline int ptep_test_and_clear_young(struct vm_area_struct *vma,
 	int r = 1;
 	if (!pte_young(pte))
 		r = 0;
-	else
+	else {
+#ifdef PJH_TRACE
+		trace_pte_update(current, vma, address, 0, pte,
+				pte_mkold(pte), "ptep_test_and_clear_young");
+#endif
 		set_pte_at(vma->vm_mm, address, ptep, pte_mkold(pte));
+	}
 	return r;
 }
+#endif  //MOVE_INLINES_TO_MEMORY_C
 #endif
 
 #ifndef __HAVE_ARCH_PMDP_TEST_AND_CLEAR_YOUNG
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
+#ifdef MOVE_INLINES_TO_MEMORY_C
+int pmdp_test_and_clear_young(struct vm_area_struct *vma,
+					    unsigned long address,
+					    pmd_t *pmdp);
+#else
 static inline int pmdp_test_and_clear_young(struct vm_area_struct *vma,
 					    unsigned long address,
 					    pmd_t *pmdp)
@@ -54,10 +83,16 @@ static inline int pmdp_test_and_clear_young(struct vm_area_struct *vma,
 	int r = 1;
 	if (!pmd_young(pmd))
 		r = 0;
-	else
+	else {
+#ifdef PJH_TRACE
+		trace_pmd_at("pmdp_test_and_clear_young", "set_pmd_at", address,
+				pmd_mkold(pmd));
+#endif
 		set_pmd_at(vma->vm_mm, address, pmdp, pmd_mkold(pmd));
+	}
 	return r;
 }
+#endif  //MOVE_INLINES_TO_MEMORY_C
 #else /* CONFIG_TRANSPARENT_HUGEPAGE */
 static inline int pmdp_test_and_clear_young(struct vm_area_struct *vma,
 					    unsigned long address,
@@ -146,18 +181,33 @@ struct mm_struct;
 static inline void ptep_set_wrprotect(struct mm_struct *mm, unsigned long address, pte_t *ptep)
 {
 	pte_t old_pte = *ptep;
+	//COWTRACE: TODO: this isn't a trace_pte_at(), it's a
+	//  trace_pte_update(). However, we don't have the vma here right
+	//  now - find the function that gets it using mm and address, then
+	//  fill in the trace event.
+	//trace_pte_update(current, vma, address, 0, old_pte,
+	//		pte_wrprotect(old_pte), "ptep_set_wrprotect");
 	set_pte_at(mm, address, ptep, pte_wrprotect(old_pte));
 }
 #endif
 
 #ifndef __HAVE_ARCH_PMDP_SET_WRPROTECT
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
+#ifdef MOVE_INLINES_TO_MEMORY_C
+void pmdp_set_wrprotect(struct mm_struct *mm,
+				      unsigned long address, pmd_t *pmdp);
+#else
 static inline void pmdp_set_wrprotect(struct mm_struct *mm,
 				      unsigned long address, pmd_t *pmdp)
 {
 	pmd_t old_pmd = *pmdp;
+#ifdef PJH_TRACE
+	trace_pmd_at("pmdp_set_wrprotect", "set_pmd_at", address,
+			pmd_wrprotect(old_pmd));
+#endif
 	set_pmd_at(mm, address, pmdp, pmd_wrprotect(old_pmd));
 }
+#endif  //MOVE_INLINES_TO_MEMORY_C
 #else /* CONFIG_TRANSPARENT_HUGEPAGE */
 static inline void pmdp_set_wrprotect(struct mm_struct *mm,
 				      unsigned long address, pmd_t *pmdp)
@@ -314,6 +364,10 @@ static inline pte_t __ptep_modify_prot_start(struct mm_struct *mm,
 	return ptep_get_and_clear(mm, addr, ptep);
 }
 
+#ifdef MOVE_INLINES_TO_MEMORY_C
+void __ptep_modify_prot_commit(struct mm_struct *mm, unsigned long addr,
+		pte_t *ptep, pte_t pte);
+#else
 static inline void __ptep_modify_prot_commit(struct mm_struct *mm,
 					     unsigned long addr,
 					     pte_t *ptep, pte_t pte)
@@ -322,8 +376,13 @@ static inline void __ptep_modify_prot_commit(struct mm_struct *mm,
 	 * The pte is non-present, so there's no hardware state to
 	 * preserve.
 	 */
+#ifdef PJH_TRACE
+	trace_pte_at("__ptep_modify_prot_commit", "set_pte_at",
+			addr, pte);
+#endif
 	set_pte_at(mm, addr, ptep, pte);
 }
+#endif  //MOVE_INLINES_TO_MEMORY_C
 
 #ifndef __HAVE_ARCH_PTEP_MODIFY_PROT_TRANSACTION
 /*

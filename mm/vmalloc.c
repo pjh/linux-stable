@@ -30,6 +30,7 @@
 #include <asm/uaccess.h>
 #include <asm/tlbflush.h>
 #include <asm/shmparam.h>
+#include <trace/events/pte.h>
 
 /*** Page table manipulation functions ***/
 
@@ -107,6 +108,8 @@ static int vmap_pte_range(pmd_t *pmd, unsigned long addr,
 			return -EBUSY;
 		if (WARN_ON(!page))
 			return -ENOMEM;
+		trace_pte_at("vmap_pte_range", "set_pte_at", addr,
+				mk_pte(page, prot));
 		set_pte_at(&init_mm, addr, pte, mk_pte(page, prot));
 		(*nr)++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);

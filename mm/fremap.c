@@ -20,6 +20,7 @@
 #include <asm/mmu_context.h>
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
+#include <trace/events/pte.h>
 
 #include "internal.h"
 
@@ -67,6 +68,7 @@ static int install_file_pte(struct mm_struct *mm, struct vm_area_struct *vma,
 	if (!pte_none(*pte))
 		zap_pte(mm, vma, addr, pte);
 
+	trace_pte_at("install_file_pte", "set_pte_at", addr, pgoff_to_pte(pgoff));
 	set_pte_at(mm, addr, pte, pgoff_to_pte(pgoff));
 	/*
 	 * We don't need to run update_mmu_cache() here because the "file pte"

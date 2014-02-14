@@ -59,6 +59,7 @@
 #include <linux/backing-dev.h>
 
 #include <asm/tlbflush.h>
+#include <trace/events/pte.h>
 
 #include "internal.h"
 
@@ -900,6 +901,7 @@ static int page_mkclean_one(struct page *page, struct vm_area_struct *vma,
 		entry = ptep_clear_flush(vma, address, pte);
 		entry = pte_wrprotect(entry);
 		entry = pte_mkclean(entry);
+		trace_pte_at("page_mkclean_one", "set_pte_at", address, entry);
 		set_pte_at(mm, address, pte, entry);
 		ret = 1;
 	}
@@ -1231,6 +1233,8 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			else
 				dec_mm_counter(mm, MM_FILEPAGES);
 		}
+		trace_pte_at("try_to_unmap_one one", "set_pte_at", address,
+				swp_entry_to_pte(make_hwpoison_entry(page)));
 		set_pte_at(mm, address, pte,
 			   swp_entry_to_pte(make_hwpoison_entry(page)));
 	} else if (PageAnon(page)) {
@@ -1242,6 +1246,8 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			 * See handle_pte_fault() ...
 			 */
 			if (swap_duplicate(entry) < 0) {
+				trace_pte_at("try_to_unmap_one two", "set_pte_at",
+						address, pteval);
 				set_pte_at(mm, address, pte, pteval);
 				ret = SWAP_FAIL;
 				goto out_unmap;
@@ -1263,6 +1269,8 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			BUG_ON(TTU_ACTION(flags) != TTU_MIGRATION);
 			entry = make_migration_entry(page, pte_write(pteval));
 		}
+		trace_pte_at("try_to_unmap_one three", "set_pte_at", address,
+				swp_entry_to_pte(entry));
 		set_pte_at(mm, address, pte, swp_entry_to_pte(entry));
 		BUG_ON(pte_file(*pte));
 	} else if (IS_ENABLED(CONFIG_MIGRATION) &&
@@ -1270,6 +1278,8 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 		/* Establish migration entry for a file page */
 		swp_entry_t entry;
 		entry = make_migration_entry(page, pte_write(pteval));
+		trace_pte_at("try_to_unmap_one four", "set_pte_at", address,
+				swp_entry_to_pte(entry));
 		set_pte_at(mm, address, pte, swp_entry_to_pte(entry));
 	} else
 		dec_mm_counter(mm, MM_FILEPAGES);
@@ -1400,8 +1410,11 @@ static int try_to_unmap_cluster(unsigned long cursor, unsigned int *mapcount,
 		pteval = ptep_clear_flush(vma, address, pte);
 
 		/* If nonlinear, store the file page offset in the pte. */
-		if (page->index != linear_page_index(vma, address))
+		if (page->index != linear_page_index(vma, address)) {
+			trace_pte_at("try_to_unmap_cluster", "set_pte_at", address,
+					pgoff_to_pte(page->index));
 			set_pte_at(mm, address, pte, pgoff_to_pte(page->index));
+		}
 
 		/* Move the dirty bit to the physical page now the pte is gone. */
 		if (pte_dirty(pteval))

@@ -41,6 +41,7 @@
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/migrate.h>
+#include <trace/events/pte.h>
 
 #include "internal.h"
 
@@ -166,6 +167,7 @@ static int remove_migration_pte(struct page *new, struct vm_area_struct *vma,
 	}
 #endif
 	flush_cache_page(vma, addr, pte_pfn(pte));
+	trace_pte_at("remove_migration_pte", "set_pte_at", addr, pte);
 	set_pte_at(mm, addr, ptep, pte);
 
 	if (PageHuge(new)) {
@@ -506,6 +508,10 @@ int migrate_page(struct address_space *mapping,
 
 	BUG_ON(PageWriteback(page));	/* Writeback must be complete */
 
+	// NUMATRACE PFTRACE
+	trace_pte_printk("migrate_page: should probably trace this and "
+			"emit NUMA and PTE events here.", 0);
+
 	rc = migrate_page_move_mapping(mapping, newpage, page, NULL, mode);
 
 	if (rc != MIGRATEPAGE_SUCCESS)
@@ -527,6 +533,10 @@ int buffer_migrate_page(struct address_space *mapping,
 {
 	struct buffer_head *bh, *head;
 	int rc;
+
+	// NUMATRACE PFTRACE
+	trace_pte_printk("buffer_migrate_page: should probably trace this "
+			"and emit NUMA and PTE events here...", 0);
 
 	if (!page_has_buffers(page))
 		return migrate_page(mapping, newpage, page, mode);
@@ -657,6 +667,18 @@ static int move_to_new_page(struct page *newpage, struct page *page,
 {
 	struct address_space *mapping;
 	int rc;
+
+	/* PJH: NUMATRACE
+	 *   The caller likely called try_to_unmap() or some other functions
+	 *   on page before calling this function, so the ptes have already
+	 *   been removed. Does this function lead to the creation of new
+	 *   ptes? If so, it looks like it happens in migrate_page /
+	 *   migratepage below...
+	 *     PFTRACE: TODO: trace those calls and see if/where ptes for
+	 *       newpage are set up!!
+	 */
+	trace_pte_printk("move_to_new_page: possible NUMA and PTE events "
+			"happening here.", 0);
 
 	/*
 	 * Block others from accessing the page when we get around to
@@ -1640,6 +1662,10 @@ int migrate_misplaced_transhuge_page(struct mm_struct *mm,
 	struct mem_cgroup *memcg = NULL;
 	int page_lru = page_is_file_cache(page);
 
+	// NUMATRACE PFTRACE
+	trace_pte_printk("migrate_misplaced_transhuge_page: should probably "
+			"trace this and emit NUMA and PTE events here...", 0);
+
 	/*
 	 * Don't migrate pages that are mapped in multiple processes.
 	 * TODO: Handle false sharing detection instead of this hammer
@@ -1717,6 +1743,8 @@ int migrate_misplaced_transhuge_page(struct mm_struct *mm,
 
 	page_add_new_anon_rmap(new_page, vma, haddr);
 
+	trace_pmd_at("migrate_misplaced_transhuge_page", "set_pmd_at", haddr,
+			entry);
 	set_pmd_at(mm, haddr, pmd, entry);
 	update_mmu_cache_pmd(vma, address, &entry);
 	page_remove_rmap(page);

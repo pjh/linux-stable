@@ -678,6 +678,7 @@ static inline void set_pte_atomic(pte_t *ptep, pte_t pte)
 static inline void pte_clear(struct mm_struct *mm, unsigned long addr,
 			     pte_t *ptep)
 {
+	//ptetrace - probably won't ever care about paravirtualization...
 	set_pte_at(mm, addr, ptep, __pte(0));
 }
 

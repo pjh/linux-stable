@@ -28,7 +28,7 @@
 #include <linux/highmem.h>
 #include <linux/kgdb.h>
 #include <asm/tlbflush.h>
-
+#include <trace/events/pte.h>
 
 #if defined(CONFIG_HIGHMEM) || defined(CONFIG_X86_32)
 DEFINE_PER_CPU(int, __kmap_atomic_idx);
@@ -198,6 +198,8 @@ start:
 		}
 	}
 	vaddr = PKMAP_ADDR(last_pkmap_nr);
+	trace_pte_at("map_new_virtual", "set_pte_at", vaddr,
+			mk_pte(page, kmap_prot));
 	set_pte_at(&init_mm, vaddr,
 		   &(pkmap_page_table[last_pkmap_nr]), mk_pte(page, kmap_prot));
 

@@ -7,6 +7,7 @@
 
 #include <asm/pgtable.h>
 #include <asm/pgtable_types.h>
+#include <linux/mm.h>
 
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM pte
@@ -200,9 +201,13 @@ DEFINE_EVENT(pte_event, pte_cow,   //trace_pte_cow()
  *     not needed.
  *   trace_pte_fault(): specifically for *protection faults* and kernel
  *     faults, where we don't have ptes readily available.
- *     Useful in some other cases as well: unexpected 
+ *     Useful in some other cases as well: unexpected ...
+ *   trace_pte_at(): calls to "set_pte_at()" and the like that I haven't
+ *     yet converted to proper trace events, but should if they are
+ *     emitted commonly.
+ *   trace_pmd_at(): same, but for pmd instead of pte.
  */
-TRACE_EVENT(pte_printk,   //trace_pte_printk("");
+TRACE_EVENT(pte_printk,   // trace_pte_printk("", 0);
 	TP_PROTO(const char *msg, int code),
 	TP_ARGS(msg, code),
 	TP_STRUCT__entry(
@@ -238,6 +243,54 @@ TRACE_EVENT(pte_fault,   //trace_pte_fault();
 	TP_printk("[%s] [%s] faultaddr=%p, code=%X",
 		__entry->label, __entry->msg, (void *)__entry->faultaddr,
 		__entry->code)
+);
+
+TRACE_EVENT(pte_at,   //trace_pte_at();
+	TP_PROTO(const char *label, const char *msg,
+		unsigned long addr, pte_t pte),
+	TP_ARGS(label, msg, addr, pte),
+	TP_STRUCT__entry(
+		__array(char, label, PTETRACE_BUF_LEN)
+		__array(char, msg, PTETRACE_BUF_LEN)
+		__field(unsigned long, addr)
+		__field(pteval_t, pteval)
+	),
+	TP_fast_assign(
+		strncpy(__entry->label, label, PTETRACE_BUF_LEN-1);
+		__entry->label[PTETRACE_BUF_LEN-1] = '\0';  //defensive
+		strncpy(__entry->msg, msg, PTETRACE_BUF_LEN-1);
+		__entry->msg[PTETRACE_BUF_LEN-1] = '\0';  //defensive
+		__entry->addr = addr;
+		__entry->pteval = pte_val(pte);
+	),
+	TP_printk("[%s] [%s] addr=%p, pte_pfn=%lu, pte_flags=%08lX",
+		__entry->label, __entry->msg, (void *)__entry->addr,
+		pteval_pfn(__entry->pteval),
+		pteval_flags(__entry->pteval))
+);
+
+TRACE_EVENT(pmd_at,   //trace_pmd_at();
+	TP_PROTO(const char *label, const char *msg,
+		unsigned long addr, pmd_t pmd),
+	TP_ARGS(label, msg, addr, pmd),
+	TP_STRUCT__entry(
+		__array(char, label, PTETRACE_BUF_LEN)
+		__array(char, msg, PTETRACE_BUF_LEN)
+		__field(unsigned long, addr)
+		__field(pmdval_t, pmdval)
+	),
+	TP_fast_assign(
+		strncpy(__entry->label, label, PTETRACE_BUF_LEN-1);
+		__entry->label[PTETRACE_BUF_LEN-1] = '\0';  //defensive
+		strncpy(__entry->msg, msg, PTETRACE_BUF_LEN-1);
+		__entry->msg[PTETRACE_BUF_LEN-1] = '\0';  //defensive
+		__entry->addr = addr;
+		__entry->pmdval = pmd_val(pmd);
+	),
+	TP_printk("[%s] [%s] addr=%p, pmd_pfn=%lu, pmd_flags=%08lX",
+		__entry->label, __entry->msg, (void *)__entry->addr,
+		pmdval_pfn(__entry->pmdval),
+		pmdval_flags(__entry->pmdval))
 );
 
 #endif /* _TRACE_PTE_H */

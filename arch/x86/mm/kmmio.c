@@ -27,6 +27,7 @@
 #include <linux/errno.h>
 #include <asm/debugreg.h>
 #include <linux/mmiotrace.h>
+#include <trace/events/pte.h>
 
 #define KMMIO_PAGE_HASH_BITS 4
 #define KMMIO_PAGE_TABLE_SIZE (1 << KMMIO_PAGE_HASH_BITS)
@@ -145,6 +146,8 @@ static int clear_page_presence(struct kmmio_fault_page *f, bool clear)
 		return -1;
 	}
 
+	trace_pte_printk("clear_page_presence - need to examine what "
+			"this does?", 0);
 	switch (level) {
 	case PG_LEVEL_2M:
 		clear_pmd_presence((pmd_t *)pte, clear, &f->old_presence);

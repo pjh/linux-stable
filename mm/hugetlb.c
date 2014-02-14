@@ -2305,6 +2305,8 @@ int copy_hugetlb_page_range(struct mm_struct *dst, struct mm_struct *src,
 			ptepage = pte_page(entry);
 			get_page(ptepage);
 			page_dup_rmap(ptepage);
+			trace_pte_at("copy_hugetlb_page_range", "set_huge_pte_at",
+					addr, entry);
 			set_huge_pte_at(dst, addr, dst_pte, entry);
 		}
 		spin_unlock(&src->page_table_lock);
@@ -2531,6 +2533,9 @@ static int hugetlb_cow(struct mm_struct *mm, struct vm_area_struct *vma,
 	unsigned long mmun_start;	/* For mmu_notifiers */
 	unsigned long mmun_end;		/* For mmu_notifiers */
 
+	// COWTRACE PFTRACE: TODO: emit COW trace event somewhere in this
+	//  function?!
+
 	old_page = pte_page(pte);
 
 retry_avoidcopy:
@@ -2628,6 +2633,8 @@ retry_avoidcopy:
 	if (likely(pte_same(huge_ptep_get(ptep), pte))) {
 		/* Break COW */
 		huge_ptep_clear_flush(vma, address, ptep);
+		trace_pte_at("hugetlb_cow", "set_huge_pte_at", address,
+				make_huge_pte(vma, new_page, 1));
 		set_huge_pte_at(mm, address, ptep,
 				make_huge_pte(vma, new_page, 1));
 		page_remove_rmap(old_page);
@@ -2788,6 +2795,7 @@ retry:
 		page_dup_rmap(page);
 	new_pte = make_huge_pte(vma, page, ((vma->vm_flags & VM_WRITE)
 				&& (vma->vm_flags & VM_SHARED)));
+	trace_pte_at("hugetlb_no_page", "set_huge_pte_at", address, new_pte);
 	set_huge_pte_at(mm, address, ptep, new_pte);
 
 	if ((flags & FAULT_FLAG_WRITE) && !(vma->vm_flags & VM_SHARED)) {
@@ -3050,6 +3058,8 @@ unsigned long hugetlb_change_protection(struct vm_area_struct *vma,
 			pte = huge_ptep_get_and_clear(mm, address, ptep);
 			pte = pte_mkhuge(pte_modify(pte, newprot));
 			pte = arch_make_huge_pte(pte, vma, NULL, 0);
+			trace_pte_at("hugetlb_change_protection", "set_huge_pte_at",
+					address, pte);
 			set_huge_pte_at(mm, address, ptep, pte);
 			pages++;
 		}

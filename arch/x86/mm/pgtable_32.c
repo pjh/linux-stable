@@ -18,6 +18,8 @@
 #include <asm/tlbflush.h>
 #include <asm/io.h>
 
+#include <trace/events/pte.h>
+
 unsigned int __VMALLOC_RESERVE = 128 << 20;
 
 /*
@@ -47,10 +49,15 @@ void set_pte_vaddr(unsigned long vaddr, pte_t pteval)
 		return;
 	}
 	pte = pte_offset_kernel(pmd, vaddr);
-	if (pte_val(pteval))
+	if (pte_val(pteval)) {
+		//ptetrace - no idea what this is used for, may need to trace
+		//  up further...
+		trace_pte_at("set_pte_vaddr", "set_pte_at", vaddr, pteval);
 		set_pte_at(&init_mm, vaddr, pte, pteval);
-	else
+	} else {
+		trace_pte_printk("set_pte_vaddr -> pte_clear", 0);
 		pte_clear(&init_mm, vaddr, pte);
+	}
 
 	/*
 	 * It's enough to flush this one mapping.

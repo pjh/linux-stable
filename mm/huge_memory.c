@@ -733,6 +733,8 @@ static int __do_huge_pmd_anonymous_page(struct mm_struct *mm,
 		 * visible after the set_pmd_at() write.
 		 */
 		page_add_new_anon_rmap(page, vma, haddr);
+		trace_pmd_at("__do_huge_pmd_anonymous_page", "set_pmd_at",
+				haddr, entry);
 		set_pmd_at(mm, haddr, pmd, entry);
 		pgtable_trans_huge_deposit(mm, pgtable);
 		add_mm_counter(mm, MM_ANONPAGES, HPAGE_PMD_NR);
@@ -775,6 +777,7 @@ static bool set_huge_zero_page(pgtable_t pgtable, struct mm_struct *mm,
 	entry = pfn_pmd(zero_pfn, vma->vm_page_prot);
 	entry = pmd_wrprotect(entry);
 	entry = pmd_mkhuge(entry);
+	trace_pmd_at("set_huge_zero_page", "set_pmd_at", haddr, entry);
 	set_pmd_at(mm, haddr, pmd, entry);
 	pgtable_trans_huge_deposit(mm, pgtable);
 	mm->nr_ptes++;
@@ -924,6 +927,7 @@ int copy_huge_pmd(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 
 	pmdp_set_wrprotect(src_mm, addr, src_pmd);
 	pmd = pmd_mkold(pmd_wrprotect(pmd));
+	trace_pmd_at("copy_huge_pmd", "set_pmd_at", addr, pmd);
 	set_pmd_at(dst_mm, addr, dst_pmd, pmd);
 	pgtable_trans_huge_deposit(dst_mm, pgtable);
 	dst_mm->nr_ptes++;
@@ -1010,6 +1014,8 @@ static int do_huge_pmd_wp_zero_page_fallback(struct mm_struct *mm,
 		}
 		pte = pte_offset_map(&_pmd, haddr);
 		VM_BUG_ON(!pte_none(*pte));
+		trace_pte_at("do_huge_pmd_wp_zero_page_fallback",
+				"set_pte_at", haddr, entry);
 		set_pte_at(mm, haddr, pte, entry);
 		pte_unmap(pte);
 	}
@@ -1103,6 +1109,8 @@ static int do_huge_pmd_wp_page_fallback(struct mm_struct *mm,
 		page_add_new_anon_rmap(pages[i], vma, haddr);
 		pte = pte_offset_map(&_pmd, haddr);
 		VM_BUG_ON(!pte_none(*pte));
+		trace_pte_at("do_huge_pmd_wp_page_fallback",
+				"set_pte_at", haddr, entry);
 		set_pte_at(mm, haddr, pte, entry);
 		pte_unmap(pte);
 	}
@@ -1225,6 +1233,7 @@ alloc:
 		entry = mk_huge_pmd(new_page, vma);
 		pmdp_clear_flush(vma, haddr, pmd);
 		page_add_new_anon_rmap(new_page, vma, haddr);
+		trace_pmd_at("do_huge_pmd_wp_page", "set_pmd_at", haddr, entry);
 		set_pmd_at(mm, haddr, pmd, entry);
 		update_mmu_cache_pmd(vma, address, pmd);
 		if (is_huge_zero_pmd(orig_pmd)) {
@@ -1277,6 +1286,8 @@ struct page *follow_trans_huge_pmd(struct vm_area_struct *vma,
 		 * young bit, instead of the current set_pmd_at.
 		 */
 		_pmd = pmd_mkyoung(pmd_mkdirty(*pmd));
+		trace_pmd_at("follow_trans_huge_pmd", "set_pmd_at",
+				addr & HPAGE_PMD_MASK, _pmd);
 		set_pmd_at(mm, addr & HPAGE_PMD_MASK, pmd, _pmd);
 	}
 	if ((flags & FOLL_MLOCK) && (vma->vm_flags & VM_LOCKED)) {
@@ -1355,6 +1366,7 @@ check_same:
 		goto out_unlock;
 clear_pmdnuma:
 	pmd = pmd_mknonnuma(pmd);
+	trace_pmd_at("do_huge_pmd_numa_page", "set_pmd_at", haddr, pmd);
 	set_pmd_at(mm, haddr, pmdp, pmd);
 	VM_BUG_ON(pmd_numa(*pmdp));
 	update_mmu_cache_pmd(vma, addr, pmdp);
@@ -1445,6 +1457,7 @@ int move_huge_pmd(struct vm_area_struct *vma, struct vm_area_struct *new_vma,
 	if (ret == 1) {
 		pmd = pmdp_get_and_clear(mm, old_addr, old_pmd);
 		VM_BUG_ON(!pmd_none(*new_pmd));
+		trace_pmd_at("change_huge_pmd", "set_pmd_at", new_addr, pmd);
 		set_pmd_at(mm, new_addr, new_pmd, pmd);
 		spin_unlock(&mm->page_table_lock);
 	}
@@ -1473,6 +1486,7 @@ int change_huge_pmd(struct vm_area_struct *vma, pmd_t *pmd,
 				entry = pmd_mknuma(entry);
 			}
 		}
+		trace_pmd_at("change_huge_pmd", "set_pmd_at", addr, entry);
 		set_pmd_at(mm, addr, pmd, entry);
 		spin_unlock(&vma->vm_mm->page_table_lock);
 		ret = 1;
@@ -1725,6 +1739,8 @@ static int __split_huge_page_map(struct page *page,
 				entry = pte_mknuma(entry);
 			pte = pte_offset_map(&_pmd, haddr);
 			BUG_ON(!pte_none(*pte));
+			trace_pte_at("__split_huge_page_map", "set_pte_at",
+					haddr, entry);
 			set_pte_at(mm, haddr, pte, entry);
 			pte_unmap(pte);
 		}
@@ -2332,6 +2348,7 @@ static void collapse_huge_page(struct mm_struct *mm,
 		pte_unmap(pte);
 		spin_lock(&mm->page_table_lock);
 		BUG_ON(!pmd_none(*pmd));
+		trace_pmd_at("collapse_huge_page", "set_pmd_at", address, _pmd);
 		set_pmd_at(mm, address, pmd, _pmd);
 		spin_unlock(&mm->page_table_lock);
 		anon_vma_unlock_write(vma->anon_vma);
@@ -2361,6 +2378,7 @@ static void collapse_huge_page(struct mm_struct *mm,
 	spin_lock(&mm->page_table_lock);
 	BUG_ON(!pmd_none(*pmd));
 	page_add_new_anon_rmap(new_page, vma, address);
+	trace_pmd_at("collapse_huge_page 2", "set_pmd_at", address, _pmd);
 	set_pmd_at(mm, address, pmd, _pmd);
 	update_mmu_cache_pmd(vma, address, pmd);
 	pgtable_trans_huge_deposit(mm, pgtable);
@@ -2678,6 +2696,8 @@ static void __split_huge_zero_page_pmd(struct vm_area_struct *vma,
 		entry = pte_mkspecial(entry);
 		pte = pte_offset_map(&_pmd, haddr);
 		VM_BUG_ON(!pte_none(*pte));
+		trace_pte_at("__split_huge_zero_page_pmd", "set_pte_at",
+				haddr, entry);
 		set_pte_at(mm, haddr, pte, entry);
 		pte_unmap(pte);
 	}

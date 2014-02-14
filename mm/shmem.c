@@ -30,6 +30,7 @@
 #include <linux/mm.h>
 #include <linux/export.h>
 #include <linux/swap.h>
+#include <trace/events/pte.h>
 
 static struct vfsmount *shm_mnt;
 
@@ -1015,6 +1016,9 @@ static int shmem_replace_page(struct page **pagep, gfp_t gfp,
 	page_cache_get(newpage);
 	copy_highpage(newpage, oldpage);
 	flush_dcache_page(newpage);
+	// COWTRACE PFTRACE
+	trace_pte_printk("shmem_replace_page: just copied a newpage - trace "
+			"this and look for COW / PTE events here!?", 0);
 
 	__set_page_locked(newpage);
 	SetPageUptodate(newpage);

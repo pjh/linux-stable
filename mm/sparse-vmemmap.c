@@ -28,6 +28,7 @@
 #include <asm/dma.h>
 #include <asm/pgalloc.h>
 #include <asm/pgtable.h>
+#include <trace/events/pte.h>
 
 /*
  * Allocate a block of memory to be used to back the virtual memory map
@@ -104,6 +105,7 @@ pte_t * __meminit vmemmap_pte_populate(pmd_t *pmd, unsigned long addr, int node)
 		if (!p)
 			return NULL;
 		entry = pfn_pte(__pa(p) >> PAGE_SHIFT, PAGE_KERNEL);
+		trace_pte_at("vmemmap_pte_populate", "set_pte_at", addr, entry);
 		set_pte_at(&init_mm, addr, pte, entry);
 	}
 	return pte;

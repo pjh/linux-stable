@@ -26,6 +26,7 @@
 #include <asm/tlbflush.h>
 
 #include <trace/events/mmap.h>
+#include <trace/events/pte.h>
 
 #include "internal.h"
 
@@ -128,6 +129,7 @@ static void move_ptes(struct vm_area_struct *vma, pmd_t *old_pmd,
 			continue;
 		pte = ptep_get_and_clear(mm, old_addr, old_pte);
 		pte = move_pte(pte, new_vma->vm_page_prot, old_addr, new_addr);
+		trace_pte_at("move_ptes", "set_pte_at", new_addr, pte);
 		set_pte_at(mm, new_addr, new_pte, pte);
 	}
 

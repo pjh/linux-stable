@@ -280,6 +280,11 @@ static inline pmdval_t pmd_flags(pmd_t pmd)
 	return native_pmd_val(pmd) & PTE_FLAGS_MASK;
 }
 
+static inline pmdval_t pmdval_flags(pmdval_t pmdval)
+{
+	return pmdval & PTE_FLAGS_MASK;
+}
+
 static inline pte_t native_make_pte(pteval_t val)
 {
 	return (pte_t) { .pte = val };

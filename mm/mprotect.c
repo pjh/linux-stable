@@ -28,6 +28,7 @@
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
 #include <trace/events/mmap.h>
+#include <trace/events/pte.h>
 
 #ifndef pgprot_modify
 static inline pgprot_t pgprot_modify(pgprot_t oldprot, pgprot_t newprot)
@@ -100,6 +101,8 @@ static unsigned long change_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
 				 * just be safe and disable write
 				 */
 				make_migration_entry_read(&entry);
+				trace_pte_at("change_pte_range", "set_pte_at", addr,
+						swp_entry_to_pte(entry));
 				set_pte_at(mm, addr, pte,
 					swp_entry_to_pte(entry));
 			}
@@ -118,6 +121,8 @@ static inline void change_pmd_protnuma(struct mm_struct *mm, unsigned long addr,
 				       pmd_t *pmd)
 {
 	spin_lock(&mm->page_table_lock);
+	trace_pmd_at("change_pmd_protnuma", "set_pmd_at", addr & PMD_MASK,
+			pmd_mknuma(*pmd));
 	set_pmd_at(mm, addr & PMD_MASK, pmd, pmd_mknuma(*pmd));
 	spin_unlock(&mm->page_table_lock);
 }

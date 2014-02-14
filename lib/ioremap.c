@@ -12,6 +12,7 @@
 #include <linux/export.h>
 #include <asm/cacheflush.h>
 #include <asm/pgtable.h>
+#include <trace/events/pte.h>
 
 static int ioremap_pte_range(pmd_t *pmd, unsigned long addr,
 		unsigned long end, phys_addr_t phys_addr, pgprot_t prot)
@@ -25,6 +26,8 @@ static int ioremap_pte_range(pmd_t *pmd, unsigned long addr,
 		return -ENOMEM;
 	do {
 		BUG_ON(!pte_none(*pte));
+		trace_pte_at("ioremap_pte_range", "set_pte_at", addr,
+				pfn_pte(pfn, prot));
 		set_pte_at(&init_mm, addr, pte, pfn_pte(pfn, prot));
 		pfn++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);

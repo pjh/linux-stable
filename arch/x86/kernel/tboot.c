@@ -44,6 +44,8 @@
 #include <asm/e820.h>
 #include <asm/io.h>
 
+#include <trace/events/pte.h>
+
 #include "../realmode/rm/wakeup.h"
 
 /* Global pointer to shared data; NULL means no measured launch. */
@@ -137,6 +139,8 @@ static int map_tboot_page(unsigned long vaddr, unsigned long pfn,
 	pte = pte_alloc_map(&tboot_mm, NULL, pmd, vaddr);
 	if (!pte)
 		return -1;
+	//ptetrace: trusted boot
+	trace_pte_at("map_tboot_page", "set_pte_at", vaddr, pfn_pte(pfn, prot));
 	set_pte_at(&tboot_mm, vaddr, pte, pfn_pte(pfn, prot));
 	pte_unmap(pte);
 	return 0;
