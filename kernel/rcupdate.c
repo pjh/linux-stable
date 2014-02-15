@@ -48,7 +48,6 @@
 #include <linux/delay.h>
 #include <linux/module.h>
 
-#include <trace/events/pte.h>
 #define CREATE_TRACE_POINTS
 #include <trace/events/rcu.h>
 

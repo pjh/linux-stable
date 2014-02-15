@@ -54,9 +54,9 @@ static inline int ptep_test_and_clear_young(struct vm_area_struct *vma,
 {
 	pte_t pte = *ptep;
 	int r = 1;
-	if (!pte_young(pte))
+	if (!pte_young(pte)) {
 		r = 0;
-	else {
+	} else {
 #ifdef PJH_TRACE
 		trace_pte_update(current, vma, address, 0, pte,
 				pte_mkold(pte), "ptep_test_and_clear_young");
@@ -81,9 +81,9 @@ static inline int pmdp_test_and_clear_young(struct vm_area_struct *vma,
 {
 	pmd_t pmd = *pmdp;
 	int r = 1;
-	if (!pmd_young(pmd))
+	if (!pmd_young(pmd)) {
 		r = 0;
-	else {
+	} else {
 #ifdef PJH_TRACE
 		trace_pmd_at("pmdp_test_and_clear_young", "set_pmd_at", address,
 				pmd_mkold(pmd));
@@ -187,6 +187,8 @@ static inline void ptep_set_wrprotect(struct mm_struct *mm, unsigned long addres
 	//  fill in the trace event.
 	//trace_pte_update(current, vma, address, 0, old_pte,
 	//		pte_wrprotect(old_pte), "ptep_set_wrprotect");
+	trace_pte_at("ptep_set_wrprotect", "COPY-ON-WRITE set_pte_at!",
+			address, pte_wrprotect(old_pte));
 	set_pte_at(mm, address, ptep, pte_wrprotect(old_pte));
 }
 #endif
@@ -377,8 +379,7 @@ static inline void __ptep_modify_prot_commit(struct mm_struct *mm,
 	 * preserve.
 	 */
 #ifdef PJH_TRACE
-	trace_pte_at("__ptep_modify_prot_commit", "set_pte_at",
-			addr, pte);
+	trace_pte_at("__ptep_modify_prot_commit", "set_pte_at", addr, pte);
 #endif
 	set_pte_at(mm, addr, ptep, pte);
 }

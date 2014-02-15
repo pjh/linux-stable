@@ -419,9 +419,9 @@ int ptep_test_and_clear_young(struct vm_area_struct *vma,
 {
 	pte_t pte = *ptep;
 	int r = 1;
-	if (!pte_young(pte))
+	if (!pte_young(pte)) {
 		r = 0;
-	else {
+	} else {
 		trace_pte_update(current, vma, address, 0, pte,
 				pte_mkold(pte), "ptep_test_and_clear_young");
 		set_pte_at(vma->vm_mm, address, ptep, pte_mkold(pte));
@@ -438,8 +438,7 @@ void __ptep_modify_prot_commit(struct mm_struct *mm,
 	 * The pte is non-present, so there's no hardware state to
 	 * preserve.
 	 */
-	trace_pte_at("__ptep_modify_prot_commit", "set_pte_at",
-			addr, pte);
+	trace_pte_at("__ptep_modify_prot_commit", "set_pte_at", addr, pte);
 	set_pte_at(mm, addr, ptep, pte);
 }
 
@@ -451,9 +450,9 @@ int pmdp_test_and_clear_young(struct vm_area_struct *vma,
 {
 	pmd_t pmd = *pmdp;
 	int r = 1;
-	if (!pmd_young(pmd))
+	if (!pmd_young(pmd)) {
 		r = 0;
-	else {
+	} else {
 		trace_pmd_at("pmdp_test_and_clear_young", "set_pmd_at", address,
 				pmd_mkold(pmd));
 		set_pmd_at(vma->vm_mm, address, pmdp, pmd_mkold(pmd));
@@ -1222,11 +1221,12 @@ again:
 				continue;
 			if (unlikely(details) && details->nonlinear_vma
 			    && linear_page_index(details->nonlinear_vma,
-						addr) != page->index)
+						addr) != page->index) {
 				trace_pte_at("zap_pte_range", "set_pte_at", addr,
 						pgoff_to_pte(page->index));
 				set_pte_at(mm, addr, pte,
 					   pgoff_to_pte(page->index));
+			}
 			if (PageAnon(page))
 				rss[MM_ANONPAGES]--;
 			else {
@@ -3777,7 +3777,7 @@ int do_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	}
 
 	pte = pte_mknonnuma(pte);
-	//trace_pte_at("do_numa_page", "set_pte_at", addr, pte);
+	trace_pte_at("do_numa_page", "set_pte_at", addr, pte);
 	set_pte_at(mm, addr, ptep, pte);
 	update_mmu_cache(vma, addr, ptep);
 
@@ -3866,7 +3866,7 @@ static int do_pmd_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		}
 		if (pte_numa(pteval)) {
 			pteval = pte_mknonnuma(pteval);
-			//trace_pte_at("do_pmd_numa_page", "set_pte_at", addr, pteval);
+			trace_pte_at("do_pmd_numa_page", "set_pte_at", addr, pteval);
 			set_pte_at(mm, addr, pte, pteval);
 		}
 		page = vm_normal_page(vma, addr, pteval);

@@ -28,6 +28,35 @@
  * "pte_t *". If old_pte or new_pte is not available, caller can maybe
  * call mk_pte(page, -1) or mk_pte(page, vma->vm_page_prot)...
  *
+ * Another important note: when calling the trace events in this file,
+ * particularly trace_pte_at(), the arguments to the trace event (which
+ * are often taken from nearby function calls in the code, e.g. to
+ * set_pte_at()) should be *idempotent*! I've examined the following
+ * calls and believe them to be idempotent, so they can be used directly
+ * in trace_pte_* and trace_pmd_* calls:
+ *   make_huge_pte(struct vm_area_struct *, struct page *, int)
+ *       vma and page are not changed
+ *   mk_pte(struct page *, pgprot_t)
+ *       page is not changed
+ *   pfn_pte(unsigned long, pgprot_t)
+ *   pgoff_to_pte(pgoff_t)
+ *   pmd_mknonnuma(pmd_t)
+ *   pmd_mknotpresent(pmd_t)
+ *   pmd_mknuma(pmd_t)
+ *   pmd_mkold(pmd_t)
+ *   pmd_wrprotect(pmd_t)
+ *   pte_mkdirty(pte_t)
+ *   pte_mkold(pte_t)
+ *   pte_mkspecial(pte_t)
+ *   pte_mkwrite(pte_t)
+ *   pte_wrprotect(pte_t)
+ *   swp_entry_to_pte(swp_entry_t)
+ * Be careful when using these function calls directly as arguments to
+ * trace events:
+ *   ... ok, none found yet.
+ * (It shouldn't actually matter if non-idempotent calls are used until
+ *  you turn tracing ON.)
+ *
  * See arch/x86/include/asm/pgtable_types.h and
  * arch/x86/include/asm/pgtable.h for functions to convert between
  * pte_t and pteval_t, to extract flags and pfn out of pteval_t, etc.
