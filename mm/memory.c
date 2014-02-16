@@ -2942,7 +2942,7 @@ gotten:
 		 * mmu page tables (such as kvm shadow page tables), we want the
 		 * new page to be mapped directly into the secondary page table.
 		 */
-		trace_pte_at("__releases", "set_pte_at_notify", address, entry);
+		trace_pte_at("do_wp_page", "set_pte_at_notify", address, entry);
 		set_pte_at_notify(mm, address, page_table, entry);
 
 		/* pftrace here! We just set our new PTE to point to the new_page
