@@ -80,10 +80,6 @@ DECLARE_EVENT_CLASS(pte_event,
 		__field(unsigned long, vm_start)
 		__field(unsigned long, vm_end)
 		__field(unsigned long, vm_flags)
-//		__field(unsigned long long, vm_pgoff)
-//		__field(unsigned int, dev_major)
-//		__field(unsigned int, dev_minor)
-//		__field(unsigned long, inode)
 		__array(char, filename, PTETRACE_BUF_LEN)
 		/* New fields for page / pte trace events:
 		 *   Note: we have to store pteval_t types here, rather than pte_t:
@@ -115,14 +111,6 @@ DECLARE_EVENT_CLASS(pte_event,
 				vma->vm_end - PAGE_SIZE :
 				vma->vm_end;
 		__entry->vm_flags = vma->vm_flags;
-//		__entry->vm_pgoff =
-//			vma->vm_file ? ((loff_t)(vma->vm_pgoff)) << PAGE_SHIFT : 0;
-//		__entry->dev_major =
-//			vma->vm_file ? MAJOR(file_inode(vma->vm_file)->i_sb->s_dev) : 0;
-//		__entry->dev_minor = 
-//			vma->vm_file ? MINOR(file_inode(vma->vm_file)->i_sb->s_dev) : 0;
-//		__entry->inode = 
-//			vma->vm_file ? file_inode(vma->vm_file)->i_ino : 0;
 		if (vma->vm_file) {
 			char *path = d_path(&(vma->vm_file->f_path),
 				(char *)(__entry->filename), PTETRACE_BUF_LEN);
@@ -145,10 +133,9 @@ DECLARE_EVENT_CLASS(pte_event,
 	 * in arch/x86/include/asm/pgtable_types.h).
 	 */
 	TP_printk("pid=%d tgid=%d ptgid=%d [%s]: %p @ %08lx-%08lx %c%c%c%c "
-//			"%08llx %02x:%02x %lu "
-			"%s faultaddr=%p, is_major=%d, "
-			"old_pte_pfn=%lu, old_pte_flags=%08lX, "
-			"new_pte_pfn=%lu, new_pte_flags=%08lX",
+			"file=[%s] faultaddr=%p is_major=%d "
+			"old_pte_pfn=%lu old_pte_flags=%08lX "
+			"new_pte_pfn=%lu new_pte_flags=%08lX",
 		__entry->pid,
 		__entry->tgid,
 		__entry->ptgid,
@@ -160,12 +147,7 @@ DECLARE_EVENT_CLASS(pte_event,
 		__entry->vm_flags & VM_WRITE ? 'w' : '-',
 		__entry->vm_flags & VM_EXEC ? 'x' : '-',
 		__entry->vm_flags & VM_MAYSHARE ? 's' : 'p',
-//		__entry->vm_pgoff,
-//		__entry->dev_major,
-//		__entry->dev_minor,
-//		__entry->inode,
 		__entry->filename,
-
 		(void *)__entry->faultaddr,
 		__entry->is_major,
 		pteval_pfn(__entry->old_pteval),    // type pteval_t (unsigned long)
@@ -269,7 +251,7 @@ TRACE_EVENT(pte_fault,   //trace_pte_fault();
 		__entry->faultaddr = faultaddr;
 		__entry->code = code;
 	),
-	TP_printk("[%s] [%s] faultaddr=%p, code=%X",
+	TP_printk("[%s] [%s] faultaddr=%p code=%X",
 		__entry->label, __entry->msg, (void *)__entry->faultaddr,
 		__entry->code)
 );
@@ -292,7 +274,7 @@ TRACE_EVENT(pte_at,   //trace_pte_at();
 		__entry->addr = addr;
 		__entry->pteval = pte_val(pte);
 	),
-	TP_printk("[%s] [%s] addr=%p, pte_pfn=%lu, pte_flags=%08lX",
+	TP_printk("[%s] [%s] addr=%p pte_pfn=%lu pte_flags=%08lX",
 		__entry->label, __entry->msg, (void *)__entry->addr,
 		pteval_pfn(__entry->pteval),
 		pteval_flags(__entry->pteval))
@@ -316,7 +298,7 @@ TRACE_EVENT(pmd_at,   //trace_pmd_at();
 		__entry->addr = addr;
 		__entry->pmdval = pmd_val(pmd);
 	),
-	TP_printk("[%s] [%s] addr=%p, pmd_pfn=%lu, pmd_flags=%08lX",
+	TP_printk("[%s] [%s] addr=%p pmd_pfn=%lu pmd_flags=%08lX",
 		__entry->label, __entry->msg, (void *)__entry->addr,
 		pmdval_pfn(__entry->pmdval),
 		pmdval_flags(__entry->pmdval))
