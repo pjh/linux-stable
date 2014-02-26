@@ -676,6 +676,18 @@ static int move_to_new_page(struct page *newpage, struct page *page,
 	 *   migratepage below...
 	 *     PFTRACE: TODO: trace those calls and see if/where ptes for
 	 *       newpage are set up!!
+	 *
+	 * I hit this message during a Chrome trace for the chrome-sandbox
+	 * process, along with several other pte_printks (all repeated a few
+	 * thousand times):
+	 *     887  pte_printk: [buffer_migrate_page: should probably trace
+	 *          this and emit NUMA and PTE events here...] code=0
+	 *    2488  pte_printk: [migrate_page: should probably trace this
+	 *          and emit NUMA and PTE events here.] code=0
+	 *    2946  pte_printk: [move_to_new_page: possible NUMA and PTE
+	 *          events happening here.] code=0
+	 * This happened on verbena... even though it doesn't have a NUMA
+	 * architecture?
 	 */
 	trace_pte_printk("move_to_new_page: possible NUMA and PTE events "
 			"happening here.", 0);

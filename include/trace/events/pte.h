@@ -24,6 +24,13 @@
 /* Define a class of trace events, "pte_event", that all take the same args
  * and have the same output. See include/trace/events/kmem.h for an example.
  *
+ * IMPORTANT: when these trace events are enabled, do not set the
+ * options/userstacktrace tracing option, or else you will likely cause
+ * a kernel deadlock on your CPU core: while the userstack entries are
+ * being gathered for a pte_* trace event emitted from the do_page_fault
+ * code path, you'll trigger another page fault, which can't be handled
+ * because interrupts / preemption are disabled or something...
+ *
  * Note that old_pte and new_pte are taken as "pte_t" values, rather than
  * "pte_t *". If old_pte or new_pte is not available, caller can maybe
  * call mk_pte(page, -1) or mk_pte(page, vma->vm_page_prot)...
@@ -123,7 +130,7 @@ DECLARE_EVENT_CLASS(pte_event,
 		__entry->filename[PTETRACE_BUF_LEN-1] = '\0';  //defensive
 
 		__entry->faultaddr = faultaddr;
-		__entry->is_major = is_major;
+		__entry->is_major = is_major ? 1 : 0;   // always 1 or 0
 		__entry->old_pteval = pte_val(old_pte);
 		__entry->new_pteval = pte_val(new_pte);
 	),
