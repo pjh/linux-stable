@@ -852,6 +852,14 @@ void __init mem_init(void)
 		test_wp_bit();
 }
 
+void __init pjh_mem_init(void)
+{
+	pr_info("PJH: (32) sizeof(struct page)=%zu, sizeof(pte_t)=%zu, "
+			"sizeof(struct vm_area_struct)=%zu\n",
+			sizeof(struct page), sizeof(pte_t),
+			sizeof(struct vm_area_struct));
+}
+
 #ifdef CONFIG_MEMORY_HOTPLUG
 int arch_add_memory(int nid, u64 start, u64 size)
 {

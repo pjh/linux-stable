@@ -1096,6 +1096,14 @@ void __init mem_init(void)
 		initsize >> 10);
 }
 
+void __init pjh_mem_init(void)
+{
+	pr_info("PJH: (64) sizeof(struct page)=%zu, sizeof(pte_t)=%zu, "
+			"sizeof(struct vm_area_struct)=%zu\n",
+			sizeof(struct page), sizeof(pte_t),
+			sizeof(struct vm_area_struct));
+}
+
 #ifdef CONFIG_DEBUG_RODATA
 const int rodata_test_data = 0xC3;
 EXPORT_SYMBOL_GPL(rodata_test_data);

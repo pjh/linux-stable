@@ -1357,6 +1357,7 @@ extern void memmap_init_zone(unsigned long, int, unsigned long,
 extern void setup_per_zone_wmarks(void);
 extern int __meminit init_per_zone_wmark_min(void);
 extern void mem_init(void);
+extern void pjh_mem_init(void);
 extern void __init mmap_init(void);
 extern void show_mem(unsigned int flags);
 extern void si_meminfo(struct sysinfo * val);

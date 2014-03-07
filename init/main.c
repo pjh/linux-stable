@@ -467,6 +467,11 @@ static void __init mm_init(void)
 	vmalloc_init();
 }
 
+static void __init pjh_init(void)
+{
+	pjh_mem_init();
+}
+
 asmlinkage void __init start_kernel(void)
 {
 	char * command_line;
@@ -640,6 +645,7 @@ asmlinkage void __init start_kernel(void)
 	}
 
 	ftrace_init();
+	pjh_init();
 
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();
