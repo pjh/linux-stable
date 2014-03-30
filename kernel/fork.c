@@ -1721,6 +1721,14 @@ long do_fork(unsigned long clone_flags,
 	 *
 	 * When enabled, this condition was hit exactly as expected during
 	 * a kernel-build trace.
+	 *
+	 * Update (3/30/14): I also saw this happen during a cassandra run:
+	 * the top-level java process (27101) forks off a child *process*
+	 * "id" (/usr/bin/id) that has a separate pid AND a separate tgid
+	 * (27417), but runs in the same address space. id-27417 proceeds
+	 * to modify java-27101's vmas three times before performing an
+	 * exec (__bprm_mm_init). What the heck - WHYYYY does the id
+	 * process modify the parent's memory map before exec()ing?
 	 */
 	//if ( (clone_flags & CLONE_VM) && 
 	//	!(clone_flags & (CLONE_THREAD | CLONE_PARENT))) {
