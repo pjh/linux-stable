@@ -1,12 +1,12 @@
 linux-stable
 ============
 
-This is pjh's mirror of the linux-stable repo. For now, this is only used for my code changes used for virtual memory tracing (based on linux-3.9.4). See (pjh/vm-analyze)[https://github.com/pjh/vm-analyze] for the corresponding tracing and analysis scripts.
+This is pjh's mirror of the linux-stable repo. For now, this is only used for my code changes used for virtual memory tracing (based on linux-3.9.4). See [pjh/vm-analyze](https://github.com/pjh/vm-analyze) for the corresponding tracing and analysis scripts.
 
-Suggested setup steps:
+Recommended setup steps:
 
 1. Configure:
-    - Copy a working config-* file from your /boot directory (e.g. run `uname -r` and grab the config for your current kernel version) to .config in the linux-3.9.4 directory.
+    - Copy a working config-* file from your /boot directory (e.g. run `uname -r` and grab the config for your current kernel version) to .config in the linux-3.9.4 directory. The .config included in this repo is unlikely to work on other machines.
     - `make oldconfig`
     - Disable unnecessary features if desired...
         * (I usually just disable Paravirtualization - to make kernel build
@@ -17,7 +17,7 @@ Suggested setup steps:
     * `sudo make headers_install`
     * `sudo make modules_install`
     * `sudo make install`
-1. Install perf tools to home directory:
+1. Install linux-3.9.4 perf tools to a well-known directory (these steps will install into your home directory):
     * (Note: you may need these apt packages: python-dev)
     * `cd linux-3.9.4/tools/perf`
     * `make`
