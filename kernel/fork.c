@@ -80,6 +80,7 @@
 
 #include <trace/events/sched.h>
 #include <trace/events/mmap.h>
+#include <trace/events/rss.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/task.h>
@@ -457,7 +458,8 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm,
 		rb_parent = &tmp->vm_rb;
 
 		mm->map_count++;
-		retval = copy_page_range(mm, oldmm, mpnt);
+		retval = copy_page_range(mm, oldmm, mpnt, trace_pid, trace_tgid,
+				trace_real_parent);
 
 		if (tmp->vm_ops && tmp->vm_ops->open)
 			tmp->vm_ops->open(tmp);
@@ -553,6 +555,12 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p)
 	mm->core_state = NULL;
 	mm->nr_ptes = 0;
 	memset(&mm->rss_stat, 0, sizeof(mm->rss_stat));
+	trace_mm_rss(p, MM_FILEPAGES, &mm->rss_stat.count[MM_FILEPAGES],
+			"mm_init");
+	trace_mm_rss(p, MM_ANONPAGES, &mm->rss_stat.count[MM_ANONPAGES],
+			"mm_init");
+	trace_mm_rss(p, MM_SWAPENTS, &mm->rss_stat.count[MM_SWAPENTS],
+			"mm_init");
 	spin_lock_init(&mm->page_table_lock);
 	mm->free_area_cache = TASK_UNMAPPED_BASE;
 	mm->cached_hole_size = ~0UL;

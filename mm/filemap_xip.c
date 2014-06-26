@@ -20,6 +20,7 @@
 #include <linux/gfp.h>
 #include <asm/tlbflush.h>
 #include <asm/io.h>
+#include <trace/events/rss.h>
 
 /*
  * We do use our own empty page to avoid interference with other users
@@ -195,6 +196,8 @@ retry:
 			pteval = ptep_clear_flush(vma, address, pte);
 			page_remove_rmap(page);
 			dec_mm_counter(mm, MM_FILEPAGES);
+			trace_mm_rss(current, MM_FILEPAGES,
+					&mm->rss_stat.count[MM_FILEPAGES], "__xip_unmap");
 			BUG_ON(pte_dirty(pteval));
 			pte_unmap_unlock(pte, ptl);
 			/* must invalidate_page _before_ freeing the page */

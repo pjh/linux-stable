@@ -40,6 +40,7 @@
 #include <linux/swapops.h>
 #include <linux/page_cgroup.h>
 #include <trace/events/pte.h>
+#include <trace/events/rss.h>
 
 static bool swap_count_continued(struct swap_info_struct *, pgoff_t,
 				 unsigned char);
@@ -906,6 +907,10 @@ static int unuse_pte(struct vm_area_struct *vma, pmd_t *pmd,
 
 	dec_mm_counter(vma->vm_mm, MM_SWAPENTS);
 	inc_mm_counter(vma->vm_mm, MM_ANONPAGES);
+	trace_mm_rss(current, MM_SWAPENTS,
+			&vma->vm_mm->rss_stat.count[MM_SWAPENTS], "unuse_pte");
+	trace_mm_rss(current, MM_ANONPAGES,
+			&vma->vm_mm->rss_stat.count[MM_ANONPAGES], "unuse_pte");
 	get_page(page);
 	// this is a clear trace_pte_update() ?
 	trace_pte_at("unuse_pte", "set_pte_at", addr,

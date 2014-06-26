@@ -27,6 +27,7 @@
 #include "internal.h"
 
 #include <trace/events/pte.h>
+#include <trace/events/rss.h>
 
 /*
  * By default transparent hugepage support is enabled for all mappings
@@ -738,6 +739,9 @@ static int __do_huge_pmd_anonymous_page(struct mm_struct *mm,
 		set_pmd_at(mm, haddr, pmd, entry);
 		pgtable_trans_huge_deposit(mm, pgtable);
 		add_mm_counter(mm, MM_ANONPAGES, HPAGE_PMD_NR);
+		trace_mm_rss(current, MM_ANONPAGES,
+				&mm->rss_stat.count[MM_ANONPAGES],
+				"__do_huge_pmd_anonymous_page");
 		mm->nr_ptes++;
 		spin_unlock(&mm->page_table_lock);
 	}
@@ -869,7 +873,8 @@ out:
 
 int copy_huge_pmd(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		  pmd_t *dst_pmd, pmd_t *src_pmd, unsigned long addr,
-		  struct vm_area_struct *vma)
+		  struct vm_area_struct *vma, pid_t trace_pid, pid_t trace_tgid,
+		  struct task_struct *trace_real_parent)
 {
 	struct page *src_page;
 	pmd_t pmd;
@@ -924,6 +929,9 @@ int copy_huge_pmd(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	get_page(src_page);
 	page_dup_rmap(src_page);
 	add_mm_counter(dst_mm, MM_ANONPAGES, HPAGE_PMD_NR);
+	trace_mm_rss_notcurrent(trace_pid, trace_tgid, trace_real_parent,
+			MM_ANONPAGES, &dst_mm->rss_stat.count[MM_ANONPAGES],
+			"copy_huge_pmd");
 
 	pmdp_set_wrprotect(src_mm, addr, src_pmd);
 	pmd = pmd_mkold(pmd_wrprotect(pmd));
@@ -1024,6 +1032,8 @@ static int do_huge_pmd_wp_zero_page_fallback(struct mm_struct *mm,
 	spin_unlock(&mm->page_table_lock);
 	put_huge_zero_page();
 	inc_mm_counter(mm, MM_ANONPAGES);
+	trace_mm_rss(current, MM_ANONPAGES, &mm->rss_stat.count[MM_ANONPAGES],
+			"do_huge_pmd_wp_zero_page_fallback");
 
 	mmu_notifier_invalidate_range_end(mm, mmun_start, mmun_end);
 
@@ -1238,6 +1248,8 @@ alloc:
 		update_mmu_cache_pmd(vma, address, pmd);
 		if (is_huge_zero_pmd(orig_pmd)) {
 			add_mm_counter(mm, MM_ANONPAGES, HPAGE_PMD_NR);
+			trace_mm_rss(current, MM_ANONPAGES,
+					&mm->rss_stat.count[MM_ANONPAGES], "do_huge_pmd_wp_page");
 			put_huge_zero_page();
 		} else {
 			VM_BUG_ON(!PageHead(page));
@@ -1398,6 +1410,8 @@ int zap_huge_pmd(struct mmu_gather *tlb, struct vm_area_struct *vma,
 			page_remove_rmap(page);
 			VM_BUG_ON(page_mapcount(page) < 0);
 			add_mm_counter(tlb->mm, MM_ANONPAGES, -HPAGE_PMD_NR);
+			trace_mm_rss(current, MM_ANONPAGES,
+					&tlb->mm->rss_stat.count[MM_ANONPAGES], "zap_huge_pmd");
 			VM_BUG_ON(!PageHead(page));
 			tlb->mm->nr_ptes--;
 			spin_unlock(&tlb->mm->page_table_lock);
@@ -2133,6 +2147,9 @@ static void __collapse_huge_page_copy(pte_t *pte, struct page *page,
 		if (pte_none(pteval)) {
 			clear_user_highpage(page, address);
 			add_mm_counter(vma->vm_mm, MM_ANONPAGES, 1);
+			trace_mm_rss(current, MM_ANONPAGES,
+					&vma->vm_mm->rss_stat.count[MM_ANONPAGES],
+					"__collapse_huge_page_copy");
 		} else {
 			src_page = pte_page(pteval);
 			copy_user_highpage(page, src_page, address, vma);

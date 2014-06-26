@@ -60,6 +60,7 @@
 
 #include <asm/tlbflush.h>
 #include <trace/events/pte.h>
+#include <trace/events/rss.h>
 
 #include "internal.h"
 
@@ -1228,10 +1229,17 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 
 	if (PageHWPoison(page) && !(flags & TTU_IGNORE_HWPOISON)) {
 		if (!PageHuge(page)) {
-			if (PageAnon(page))
+			if (PageAnon(page)) {
 				dec_mm_counter(mm, MM_ANONPAGES);
-			else
+				trace_mm_rss(current, MM_ANONPAGES,
+						&mm->rss_stat.count[MM_ANONPAGES],
+						"try_to_unmap_one");
+			} else {
 				dec_mm_counter(mm, MM_FILEPAGES);
+				trace_mm_rss(current, MM_FILEPAGES,
+						&mm->rss_stat.count[MM_FILEPAGES],
+						"try_to_unmap_one");
+			}
 		}
 		trace_pte_at("try_to_unmap_one one", "set_pte_at", address,
 				swp_entry_to_pte(make_hwpoison_entry(page)));
@@ -1260,6 +1268,10 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			}
 			dec_mm_counter(mm, MM_ANONPAGES);
 			inc_mm_counter(mm, MM_SWAPENTS);
+			trace_mm_rss(current, MM_ANONPAGES,
+					&mm->rss_stat.count[MM_ANONPAGES], "try_to_unmap_one");
+			trace_mm_rss(current, MM_SWAPENTS,
+					&mm->rss_stat.count[MM_SWAPENTS], "try_to_unmap_one");
 		} else if (IS_ENABLED(CONFIG_MIGRATION)) {
 			/*
 			 * Store the pfn of the page in a special migration
@@ -1281,8 +1293,11 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 		trace_pte_at("try_to_unmap_one four", "set_pte_at", address,
 				swp_entry_to_pte(entry));
 		set_pte_at(mm, address, pte, swp_entry_to_pte(entry));
-	} else
+	} else {
 		dec_mm_counter(mm, MM_FILEPAGES);
+		trace_mm_rss(current, MM_FILEPAGES,
+				&mm->rss_stat.count[MM_FILEPAGES], "try_to_unmap_one");
+	}
 
 	page_remove_rmap(page);
 	page_cache_release(page);
@@ -1423,6 +1438,8 @@ static int try_to_unmap_cluster(unsigned long cursor, unsigned int *mapcount,
 		page_remove_rmap(page);
 		page_cache_release(page);
 		dec_mm_counter(mm, MM_FILEPAGES);
+		trace_mm_rss(current, MM_FILEPAGES, &mm->rss_stat.count[MM_FILEPAGES],
+				"is_vma_temporary_stack");
 		(*mapcount)--;
 	}
 	pte_unmap_unlock(pte - 1, ptl);

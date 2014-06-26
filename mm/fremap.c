@@ -21,6 +21,7 @@
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
 #include <trace/events/pte.h>
+#include <trace/events/rss.h>
 
 #include "internal.h"
 
@@ -42,6 +43,8 @@ static void zap_pte(struct mm_struct *mm, struct vm_area_struct *vma,
 			page_cache_release(page);
 			update_hiwater_rss(mm);
 			dec_mm_counter(mm, MM_FILEPAGES);
+			trace_mm_rss(current, MM_FILEPAGES,
+					&mm->rss_stat.count[MM_FILEPAGES], "zap_pte");
 		}
 	} else {
 		if (!pte_file(pte))

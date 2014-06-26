@@ -70,6 +70,8 @@
 #include "internal.h"
 
 #include <trace/events/pte.h>
+#define CREATE_TRACE_POINTS
+#include <trace/events/rss.h>
 
 #ifdef LAST_NID_NOT_IN_PAGE_FLAGS
 #warning Unfortunate NUMA and NUMA Balancing config, growing page-frame for last_nid.
@@ -140,6 +142,7 @@ void sync_mm_rss(struct mm_struct *mm)
 	for (i = 0; i < NR_MM_COUNTERS; i++) {
 		if (current->rss_stat.count[i]) {
 			add_mm_counter(mm, i, current->rss_stat.count[i]);
+			trace_mm_rss(current, i, &mm->rss_stat.count[i], "sync_mm_rss");
 			current->rss_stat.count[i] = 0;
 		}
 	}
@@ -150,10 +153,21 @@ static void add_mm_counter_fast(struct mm_struct *mm, int member, int val)
 {
 	struct task_struct *task = current;
 
-	if (likely(task->mm == mm))
+	if (likely(task->mm == mm)) {
 		task->rss_stat.count[member] += val;
-	else
+	} else {
 		add_mm_counter(mm, member, val);
+		/* PJH: note here that we also instrument calls to
+		 * inc_mm_counter_fast() and dec_mm_counter_fast() with trace events,
+		 * because if SPLIT_RSS_COUNTING is not defined, calls to these
+		 * functions will directly call inc/dec_mm_counter(), which we do
+		 * want to trace after. If SPLIT_RSS_COUNTING is defined, this
+		 * means that calls to inc/dec_mm_counter_fast() will end up
+		 * emitting two trace events, but that's fine.
+		 */
+		trace_mm_rss(task, member, &mm->rss_stat.count[member],
+				"add_mm_counter_fast");
+	}
 }
 #define inc_mm_counter_fast(mm, member) add_mm_counter_fast(mm, member, 1)
 #define dec_mm_counter_fast(mm, member) add_mm_counter_fast(mm, member, -1)
@@ -723,9 +737,13 @@ static inline void add_mm_rss_vec(struct mm_struct *mm, int *rss)
 
 	if (current->mm == mm)
 		sync_mm_rss(mm);
-	for (i = 0; i < NR_MM_COUNTERS; i++)
-		if (rss[i])
+	for (i = 0; i < NR_MM_COUNTERS; i++) {
+		if (rss[i]) {
 			add_mm_counter(mm, i, rss[i]);
+			trace_mm_rss(current, i, &mm->rss_stat.count[i],
+					"add_mm_rss_vec");
+		}
+	}
 }
 
 /*
@@ -1045,9 +1063,11 @@ again:
 	return 0;
 }
 
-static inline int copy_pmd_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
-		pud_t *dst_pud, pud_t *src_pud, struct vm_area_struct *vma,
-		unsigned long addr, unsigned long end)
+static inline int copy_pmd_range(struct mm_struct *dst_mm,
+		struct mm_struct *src_mm, pud_t *dst_pud, pud_t *src_pud,
+		struct vm_area_struct *vma, unsigned long addr, unsigned long end,
+		pid_t trace_pid, pid_t trace_tgid,
+		struct task_struct *trace_real_parent)
 {
 	pmd_t *src_pmd, *dst_pmd;
 	unsigned long next;
@@ -1062,7 +1082,8 @@ static inline int copy_pmd_range(struct mm_struct *dst_mm, struct mm_struct *src
 			int err;
 			VM_BUG_ON(next-addr != HPAGE_PMD_SIZE);
 			err = copy_huge_pmd(dst_mm, src_mm,
-					    dst_pmd, src_pmd, addr, vma);
+					    dst_pmd, src_pmd, addr, vma, trace_pid, trace_tgid,
+						trace_real_parent);
 			if (err == -ENOMEM)
 				return -ENOMEM;
 			if (!err)
@@ -1078,9 +1099,11 @@ static inline int copy_pmd_range(struct mm_struct *dst_mm, struct mm_struct *src
 	return 0;
 }
 
-static inline int copy_pud_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
-		pgd_t *dst_pgd, pgd_t *src_pgd, struct vm_area_struct *vma,
-		unsigned long addr, unsigned long end)
+static inline int copy_pud_range(struct mm_struct *dst_mm,
+		struct mm_struct *src_mm, pgd_t *dst_pgd, pgd_t *src_pgd,
+		struct vm_area_struct *vma, unsigned long addr, unsigned long end,
+		pid_t trace_pid, pid_t trace_tgid,
+		struct task_struct *trace_real_parent)
 {
 	pud_t *src_pud, *dst_pud;
 	unsigned long next;
@@ -1094,14 +1117,16 @@ static inline int copy_pud_range(struct mm_struct *dst_mm, struct mm_struct *src
 		if (pud_none_or_clear_bad(src_pud))
 			continue;
 		if (copy_pmd_range(dst_mm, src_mm, dst_pud, src_pud,
-						vma, addr, next))
+						vma, addr, next, trace_pid, trace_tgid,
+						trace_real_parent))
 			return -ENOMEM;
 	} while (dst_pud++, src_pud++, addr = next, addr != end);
 	return 0;
 }
 
 int copy_page_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
-		struct vm_area_struct *vma)
+		struct vm_area_struct *vma, pid_t trace_pid, pid_t trace_tgid,
+		struct task_struct *trace_real_parent)
 {
 	pgd_t *src_pgd, *dst_pgd;
 	unsigned long next;
@@ -1158,7 +1183,8 @@ int copy_page_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		if (pgd_none_or_clear_bad(src_pgd))
 			continue;
 		if (unlikely(copy_pud_range(dst_mm, src_mm, dst_pgd, src_pgd,
-					    vma, addr, next))) {
+					    vma, addr, next, trace_pid, trace_tgid,
+						trace_real_parent))) {
 			ret = -ENOMEM;
 			break;
 		}
@@ -2178,6 +2204,8 @@ static int insert_page(struct vm_area_struct *vma, unsigned long addr,
 	/* Ok, finally just insert the thing.. */
 	get_page(page);
 	inc_mm_counter_fast(mm, MM_FILEPAGES);
+	trace_mm_rss(current, MM_FILEPAGES, &mm->rss_stat.count[MM_FILEPAGES],
+			"insert_page");
 	page_add_file_rmap(page);
 	trace_pte_at("insert_page", "set_pte_at", addr, mk_pte(page, prot));
 	set_pte_at(mm, addr, pte, mk_pte(page, prot));
@@ -2923,9 +2951,16 @@ gotten:
 			if (!PageAnon(old_page)) {
 				dec_mm_counter_fast(mm, MM_FILEPAGES);
 				inc_mm_counter_fast(mm, MM_ANONPAGES);
+				trace_mm_rss(current, MM_FILEPAGES,
+						&mm->rss_stat.count[MM_FILEPAGES], "do_wp_page");
+				trace_mm_rss(current, MM_ANONPAGES,
+						&mm->rss_stat.count[MM_ANONPAGES], "do_wp_page");
 			}
-		} else
+		} else {
 			inc_mm_counter_fast(mm, MM_ANONPAGES);
+			trace_mm_rss(current, MM_ANONPAGES,
+					&mm->rss_stat.count[MM_ANONPAGES], "do_wp_page");
+		}
 		flush_cache_page(vma, address, pte_pfn(orig_pte));
 		entry = mk_pte(new_page, vma->vm_page_prot);
 		entry = maybe_mkwrite(pte_mkdirty(entry), vma);
@@ -3271,6 +3306,10 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 
 	inc_mm_counter_fast(mm, MM_ANONPAGES);
 	dec_mm_counter_fast(mm, MM_SWAPENTS);
+	trace_mm_rss(current, MM_ANONPAGES, &mm->rss_stat.count[MM_ANONPAGES],
+			"do_swap_page");
+	trace_mm_rss(current, MM_SWAPENTS, &mm->rss_stat.count[MM_SWAPENTS],
+			"do_swap_page");
 	pte = mk_pte(page, vma->vm_page_prot);
 	if ((flags & FAULT_FLAG_WRITE) && reuse_swap_page(page)) {
 		pte = maybe_mkwrite(pte_mkdirty(pte), vma);
@@ -3428,6 +3467,8 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		goto release;
 
 	inc_mm_counter_fast(mm, MM_ANONPAGES);
+	trace_mm_rss(current, MM_ANONPAGES, &mm->rss_stat.count[MM_ANONPAGES],
+			"do_anonymous_page");
 	page_add_new_anon_rmap(page, vma, address);
 setpte:
 	set_pte_at(mm, address, page_table, entry);
@@ -3610,9 +3651,13 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 			entry = maybe_mkwrite(pte_mkdirty(entry), vma);
 		if (anon) {
 			inc_mm_counter_fast(mm, MM_ANONPAGES);
+			trace_mm_rss(current, MM_ANONPAGES,
+					&mm->rss_stat.count[MM_ANONPAGES], "__do_fault");
 			page_add_new_anon_rmap(page, vma, address);
 		} else {
 			inc_mm_counter_fast(mm, MM_FILEPAGES);
+			trace_mm_rss(current, MM_FILEPAGES,
+					&mm->rss_stat.count[MM_FILEPAGES], "__do_fault");
 			page_add_file_rmap(page);
 			if (flags & FAULT_FLAG_WRITE) {
 				dirty_page = page;

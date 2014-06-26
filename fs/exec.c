@@ -66,6 +66,7 @@
 
 #include <trace/events/mmap.h>
 #include <trace/events/sched.h>
+#include <trace/events/rss.h>
 
 int suid_dumpable = 0;
 
@@ -175,6 +176,8 @@ static void acct_arg_size(struct linux_binprm *bprm, unsigned long pages)
 
 	bprm->vma_pages = pages;
 	add_mm_counter(mm, MM_ANONPAGES, diff);
+	trace_mm_rss(current, MM_ANONPAGES, &mm->rss_stat.count[MM_ANONPAGES],
+			"acct_arg_size");
 }
 
 static struct page *get_arg_page(struct linux_binprm *bprm, unsigned long pos,

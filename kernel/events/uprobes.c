@@ -38,6 +38,7 @@
 
 #include <linux/uprobes.h>
 #include <trace/events/pte.h>
+#include <trace/events/rss.h>
 
 #define UINSNS_PER_PAGE			(PAGE_SIZE/UPROBE_XOL_SLOT_BYTES)
 #define MAX_UPROBE_XOL_SLOTS		UINSNS_PER_PAGE
@@ -141,6 +142,10 @@ static int __replace_page(struct vm_area_struct *vma, unsigned long addr,
 	if (!PageAnon(page)) {
 		dec_mm_counter(mm, MM_FILEPAGES);
 		inc_mm_counter(mm, MM_ANONPAGES);
+		trace_mm_rss(current, MM_FILEPAGES,
+				&mm->rss_stat.count[MM_FILEPAGES], "__replace_page");
+		trace_mm_rss(current, MM_ANONPAGES,
+				&mm->rss_stat.count[MM_ANONPAGES], "__replace_page");
 	}
 
 	flush_cache_page(vma, addr, pte_pfn(*ptep));
